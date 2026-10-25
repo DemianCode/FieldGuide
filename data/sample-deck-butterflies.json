@@ -1,0 +1,45 @@
+{
+  "title": "Butterfly Identification",
+  "category": "Insects & Lepidoptera",
+  "icon": "🦋",
+  "color": "#f59e0b",
+  "description": "Sample custom JSON deck for identifying notable butterfly species by wing patterns.",
+  "cards": [
+    {
+      "id": "bfly-monarch",
+      "name": "Monarch Butterfly",
+      "subtitle": "Danaus plexippus",
+      "badge": "Nymphalidae",
+      "description": "Famous for its multigenerational annual migration across North America. Caterpillars feed exclusively on milkweed, sequestering cardenolide toxins that make adults unpalatable to predators.",
+      "keyFeatures": "Tawny-orange wings with bold black veins and double rows of white spots along black borders.",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Monarch_butterfly"
+    },
+    {
+      "id": "bfly-peacock",
+      "name": "European Peacock",
+      "subtitle": "Aglais io",
+      "badge": "Nymphalidae",
+      "description": "A colourful butterfly found throughout temperate Europe and Asia. When threatened, it flashes its four dramatic eyespots to startle birds, while its underside resembles dead dark leaves for camouflage.",
+      "keyFeatures": "Rusty-red wings with a striking blue-and-black eyespot on each of the four wing corners.",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Aglais_io"
+    },
+    {
+      "id": "bfly-morpho",
+      "name": "Menelaus Blue Morpho",
+      "subtitle": "Morpho menelaus",
+      "badge": "Nymphalidae",
+      "description": "An iridescent Neotropical butterfly whose brilliant metallic-blue wing color comes from microscopic nanostructures on the wing scales that diffract light rather than pigment.",
+      "keyFeatures": "Iridescent electric-blue dorsal wings with dark margins; brown underside with bronze eyespots.",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Morpho_menelaus"
+    },
+    {
+      "id": "bfly-swallowtail",
+      "name": "Old World Swallowtail",
+      "subtitle": "Papilio machaon",
+      "badge": "Papilionidae",
+      "description": "A large yellow-and-black butterfly distributed across the Northern Hemisphere. It features prominent hindwing tails and a brick-red eyespot near the inner rear angle of the hindwing.",
+      "keyFeatures": "Creamy-yellow wings with black vein markings, blue submarginal band, hindwing tails, and red eyespot.",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Papilio_machaon"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- Back card -->
+  <rect x="136" y="88" width="260" height="330" rx="28" transform="rotate(8 266 253)" fill="#ec4899" opacity="0.75"/>
+  <!-- Front card -->
+  <rect x="108" y="96" width="268" height="336" rx="28" fill="url(#cardGrad)"/>
+  <rect x="128" y="116" width="228" height="168" rx="16" fill="#0f172a" opacity="0.85"/>
+  <!-- Mountain/Sun/Bird emblem inside card photo frame -->
+  <circle cx="176" cy="160" r="20" fill="#fbbf24"/>
+  <path d="M136 268 L195 198 L245 248 L290 190 L348 268 Z" fill="#38bdf8" opacity="0.8"/>
+  <!-- Text lines on card -->
+  <rect x="132" y="310" width="160" height="22" rx="11" fill="#ffffff"/>
+  <rect x="132" y="346" width="115" height="14" rx="7" fill="#e0e7ff" opacity="0.85"/>
+  <rect x="132" y="378" width="210" height="12" rx="6" fill="#e0e7ff" opacity="0.6"/>
+</svg>
