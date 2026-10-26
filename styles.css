@@ -1526,6 +1526,13 @@ textarea:focus-visible,
   color: var(--danger-text);
 }
 
+.sheet-item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .mode-launch {
   display: flex;
   flex-direction: column;

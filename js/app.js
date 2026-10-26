@@ -177,7 +177,20 @@ const ICON_PATHS = {
   shuffle: '<path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
   folder: '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0zM17 5h3v2a3 3 0 01-3 3M7 5H4v2a3 3 0 003 3"/>',
-  external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>'
+  external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
+  doc: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7z"/>',
+  pencil: '<path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  clipboard: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 11h6M9 15h6"/>',
+  download: '<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  reset: '<path d="M3 12a9 9 0 109-9 9 9 0 00-6.4 2.6L3 8M3 3v5h5"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-9 9"/>',
+  type: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1"/>',
+  fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  crop: '<path d="M6 2v14a2 2 0 002 2h14M2 6h14a2 2 0 012 2v14"/>',
+  dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="12" cy="12" r="1"/>'
 };
 
 function icon(name, cls = '') {
@@ -255,7 +268,7 @@ async function assignDeckToFolder(deckId, folderName) {
     state.customFolders.push(cleanFolder);
     saveCustomFolders();
   }
-  showToast(`Moved "${deck.title}" to 📁 ${cleanFolder}`);
+  showToast(`Moved "${deck.title}" to ${cleanFolder}`);
   render();
 }
 
@@ -273,7 +286,7 @@ async function createNewFolder(rawName, deckIdToMove = null) {
   if (deckIdToMove) {
     await assignDeckToFolder(deckIdToMove, clean);
   } else {
-    showToast(`Created folder "📁 ${clean}"`);
+    showToast(`Created folder "${clean}"`);
     render();
   }
 }
@@ -297,7 +310,7 @@ async function renameExistingFolder(oldName, newName) {
   if (state.homeFolderFilter === oldName) state.homeFolderFilter = cleanNew;
   state.renamingFolder = null;
   state.renameFolderInput = '';
-  showToast(`Renamed folder to "📁 ${cleanNew}"`);
+  showToast(`Renamed folder to "${cleanNew}"`);
   render();
 }
 
@@ -536,7 +549,7 @@ async function cycleBrowseCardStatus(cardId) {
   const nextStatus = nextOrder[current] || 'mastered';
   const updated = await updateCardProgress(cardId, deck.id, nextStatus);
   state.progressMap[cardId] = updated;
-  const labels = { new: 'Marked as New', learning: 'Marked as Still Learning', mastered: 'Marked as Mastered ✓' };
+  const labels = { new: 'Marked as New', learning: 'Marked as Still Learning', mastered: 'Marked as Mastered' };
   showToast(labels[nextStatus]);
   render();
 }
@@ -1591,16 +1604,16 @@ function renderBottomSheet() {
             <div class="sheet-section-label">Create &amp; Organize</div>
             <div class="sheet-menu-list">
               <button class="sheet-item" data-action="open-add-deck" data-tab="paste">
-                <span>📝 Paste Text or Upload Deck File</span>
-                <span>›</span>
+                <span class="sheet-item-label">${icon('doc', 'sm')} Paste text or upload a deck file</span>
+                <span>${icon('next', 'sm')}</span>
               </button>
               <button class="sheet-item" data-action="open-add-deck" data-tab="prompt">
-                <span>🤖 AI Deck Prompt Generator</span>
-                <span>›</span>
+                <span class="sheet-item-label">${icon('sparkle', 'sm')} AI deck prompt generator</span>
+                <span>${icon('next', 'sm')}</span>
               </button>
               <button class="sheet-item" data-action="open-sheet" data-sheet="manage-folders">
-                <span>📁 Manage Folders (${folderStats.length})</span>
-                <span>›</span>
+                <span class="sheet-item-label">${icon('folder', 'sm')} Manage folders (${folderStats.length})</span>
+                <span>${icon('next', 'sm')}</span>
               </button>
             </div>
           </div>
@@ -1623,7 +1636,7 @@ function renderBottomSheet() {
                 : `
                   <div class="sheet-menu-list">
                     <button class="sheet-item" data-action="ask-confirm" data-confirm="restore-starters">
-                      <span>↻ Restore Built-in Starter Decks</span>
+                      <span class="sheet-item-label">${icon('reset', 'sm')} Restore built-in starter decks</span>
                       <span></span>
                     </button>
                   </div>
@@ -1642,7 +1655,7 @@ function renderBottomSheet() {
         <div class="bottom-sheet" onclick="event.stopPropagation()">
           <div class="sheet-handle"></div>
           <div class="sheet-header">
-            <span class="sheet-title">📁 Organize Folders</span>
+            <span class="sheet-title">Organize folders</span>
             <button class="sheet-close-btn" data-action="close-sheet" aria-label="Close">${icon('close', 'sm')}</button>
           </div>
 
@@ -1681,8 +1694,8 @@ function renderBottomSheet() {
                           <button class="btn btn-primary" data-action="save-rename-folder" data-old="${esc(f.name)}" style="padding:8px 12px;">
                             Save
                           </button>
-                          <button class="btn btn-secondary" data-action="cancel-rename-folder" style="padding:8px 12px;">
-                            ✕
+                          <button class="btn btn-secondary" data-action="cancel-rename-folder" style="padding:8px 12px;" aria-label="Cancel">
+                            ${icon('close', 'sm')}
                           </button>
                         </div>
                       </div>
@@ -1696,7 +1709,7 @@ function renderBottomSheet() {
                         data-action="select-folder-and-close"
                         data-folder="${esc(f.name)}"
                       >
-                        <span>📁</span>
+                        ${icon('folder', 'sm')}
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</span>
                         <span style="font-size:0.75rem;color:var(--text-muted);">(${f.count} ${f.count === 1 ? 'set' : 'sets'})</span>
                       </div>
@@ -1707,7 +1720,7 @@ function renderBottomSheet() {
                           data-folder="${esc(f.name)}"
                           title="Rename folder"
                         >
-                          ✏️ Rename
+                          ${icon('pencil', 'xs')} Rename
                         </button>
                         <button
                           class="hint-pill-btn"
@@ -1715,8 +1728,9 @@ function renderBottomSheet() {
                           data-action="delete-folder"
                           data-folder="${esc(f.name)}"
                           title="Remove folder"
+                          aria-label="Remove folder"
                         >
-                          ✕
+                          ${icon('trash', 'xs')}
                         </button>
                       </div>
                     </div>
@@ -1753,14 +1767,14 @@ function renderBottomSheet() {
               data-action="switch-add-tab"
               data-tab="paste"
             >
-              📝 1. Paste / Upload
+              ${icon('doc', 'sm')}<span>Paste deck</span>
             </button>
             <button
               class="mode-seg-btn ${state.addDeckTab === 'prompt' ? 'active' : ''}"
               data-action="switch-add-tab"
               data-tab="prompt"
             >
-              🤖 2. Get AI Prompt
+              ${icon('sparkle', 'sm')}<span>AI prompt</span>
             </button>
           </div>
 
@@ -1768,7 +1782,7 @@ function renderBottomSheet() {
             state.addDeckTab === 'paste'
               ? `
                 <div class="sheet-section">
-                  <div class="sheet-section-label">📁 Save to Folder (Optional)</div>
+                  <div class="sheet-section-label">Save to folder (optional)</div>
                   <input
                     type="text"
                     id="import-folder-input"
@@ -1788,7 +1802,7 @@ function renderBottomSheet() {
                                   data-action="pick-import-folder"
                                   data-folder="${esc(f.name)}"
                                 >
-                                  <span>📁 ${esc(f.name)}</span>
+                                  <span>${esc(f.name)}</span>
                                 </button>
                               `
                             )
@@ -1801,7 +1815,7 @@ function renderBottomSheet() {
                 <div class="sheet-section">
                   <div style="display:flex;align-items:center;justify-content:space-between;">
                     <span class="sheet-section-label">Paste AI Reply or JSON</span>
-                    <button class="hint-pill-btn" data-action="paste-clipboard">📋 Paste Clipboard</button>
+                    <button class="hint-pill-btn" data-action="paste-clipboard">${icon('clipboard', 'xs')} Paste clipboard</button>
                   </div>
                   <textarea
                     id="json-paste-area"
@@ -1818,10 +1832,10 @@ function renderBottomSheet() {
 
                 <div class="dock-row" style="margin-top:2px;">
                   <button class="btn btn-secondary" data-action="switch-add-tab" data-tab="prompt" style="flex:1;">
-                    🤖 Need Prompt?
+                    Get AI prompt
                   </button>
                   <button class="btn btn-primary" data-action="submit-import-json" style="flex:1.3;">
-                    Create Deck ✓
+                    Create deck
                   </button>
                 </div>
               `
@@ -1844,7 +1858,7 @@ function renderBottomSheet() {
                       value="${esc(state.importTopicInput)}"
                     />
                     <button class="btn btn-primary" data-action="copy-ai-prompt" style="white-space:nowrap;">
-                      📋 Copy
+                      ${icon('clipboard', 'sm')} Copy
                     </button>
                   </div>
                 </div>
@@ -1861,7 +1875,7 @@ function renderBottomSheet() {
 
                 <div class="dock-row">
                   <button class="btn btn-primary" data-action="switch-add-tab" data-tab="paste" style="width:100%;">
-                    Go to Paste Box →
+                    Go to paste box ${icon('next', 'sm')}
                   </button>
                 </div>
               `
@@ -1878,7 +1892,7 @@ function renderBottomSheet() {
     return renderDeckManagementSheetContent(deck, false);
   }
 
-  // 5. FOCUSED STUDY OPTIONS SHEET (FROM STUDY HEADER `⚙️` BUTTON)
+  // 5. FOCUSED STUDY OPTIONS SHEET (FROM STUDY HEADER OPTIONS BUTTON)
   if (state.activeSheet === 'study-options') {
     const deck = getActiveDeck();
     if (!deck) return '';
@@ -1941,7 +1955,7 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
         }
 
         <div class="sheet-section">
-          <div class="sheet-section-label">📁 Folder / Category</div>
+          <div class="sheet-section-label">Folder</div>
           <div class="sheet-pill-grid">
             ${folderStats
               .map(
@@ -1952,8 +1966,8 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
                     data-deck="${esc(deck.id)}"
                     data-folder="${esc(f.name)}"
                   >
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📁 ${esc(f.name)}</span>
-                    <span>${currentFolder === f.name ? '✓' : ''}</span>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</span>
+                    <span>${currentFolder === f.name ? icon('check', 'sm') : ''}</span>
                   </button>
                 `
               )
@@ -1986,17 +2000,17 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
               <span>
                 ${
                   isDownloading
-                    ? `⏳ Saving Offline (${esc(state.downloadProgressText)})...`
-                    : `📥 Save Photos Offline (${cachedCount}/${deck.cards.length} cached)`
+                    ? `Saving offline (${esc(state.downloadProgressText)})…`
+                    : `${icon('download', 'sm')} Save photos offline (${cachedCount}/${deck.cards.length})`
                 }
               </span>
               <span style="color:var(--accent-text);font-size:0.85rem;">
-                ${cachedCount >= deck.cards.length && deck.cards.length > 0 ? '✓ Saved' : 'Download'}
+                ${cachedCount >= deck.cards.length && deck.cards.length > 0 ? 'Saved' : 'Download'}
               </span>
             </button>
 
             <button class="sheet-item" data-action="export-deck" data-deck="${esc(deck.id)}">
-              <span>⬇ Export Deck (.json)</span>
+              <span class="sheet-item-label">${icon('download', 'sm')} Export deck (.json)</span>
               <span></span>
             </button>
 
@@ -2015,7 +2029,7 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
                 `
                 : `
                   <button class="sheet-item" data-action="ask-confirm" data-confirm="reset-progress">
-                    <span>↺ Reset Mastery Progress</span>
+                    <span class="sheet-item-label">${icon('reset', 'sm')} Reset mastery progress</span>
                     <span></span>
                   </button>
                 `
@@ -2036,7 +2050,7 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
                 `
                 : `
                   <button class="sheet-item danger" data-action="ask-confirm" data-confirm="delete-deck">
-                    <span>🗑 Delete Deck</span>
+                    <span class="sheet-item-label">${icon('trash', 'sm')} Delete deck</span>
                     <span></span>
                   </button>
                 `
@@ -2081,16 +2095,16 @@ function renderModeSpecificSettingsSection(counts) {
           data-action="set-image-fit"
           data-contain="true"
         >
-          <span>◱ Fit Full Photo</span>
-          <span>${state.imageFitContain ? '✓' : ''}</span>
+          <span class="sheet-item-label">${icon('fit', 'sm')} Fit full photo</span>
+          <span>${state.imageFitContain ? icon('check', 'sm') : ''}</span>
         </button>
         <button
           class="sheet-pill-opt ${!state.imageFitContain ? 'active' : ''}"
           data-action="set-image-fit"
           data-contain="false"
         >
-          <span>⛶ Crop to Fill</span>
-          <span>${!state.imageFitContain ? '✓' : ''}</span>
+          <span class="sheet-item-label">${icon('crop', 'sm')} Crop to fill</span>
+          <span>${!state.imageFitContain ? icon('check', 'sm') : ''}</span>
         </button>
       </div>
     </div>
@@ -2116,7 +2130,7 @@ function renderModeSpecificSettingsSection(counts) {
                   data-keep-sheet="true"
                 >
                   <span>${lbl}</span>
-                  <span>${state.browseFilter === val ? '✓' : ''}</span>
+                  <span>${state.browseFilter === val ? icon('check', 'sm') : ''}</span>
                 </button>
               `
             )
@@ -2138,8 +2152,8 @@ function renderModeSpecificSettingsSection(counts) {
             data-prompt="image-first"
             data-keep-sheet="true"
           >
-            <span>🖼️ Photo First</span>
-            <span>${state.recallPromptType === 'image-first' ? '✓' : ''}</span>
+            <span class="sheet-item-label">${icon('image', 'sm')} Photo first</span>
+            <span>${state.recallPromptType === 'image-first' ? icon('check', 'sm') : ''}</span>
           </button>
           <button
             class="sheet-pill-opt ${state.recallPromptType === 'name-first' ? 'active' : ''}"
@@ -2147,8 +2161,8 @@ function renderModeSpecificSettingsSection(counts) {
             data-prompt="name-first"
             data-keep-sheet="true"
           >
-            <span>🔤 Name First</span>
-            <span>${state.recallPromptType === 'name-first' ? '✓' : ''}</span>
+            <span class="sheet-item-label">${icon('type', 'sm')} Name first</span>
+            <span>${state.recallPromptType === 'name-first' ? icon('check', 'sm') : ''}</span>
           </button>
         </div>
       </div>
@@ -2162,7 +2176,7 @@ function renderModeSpecificSettingsSection(counts) {
             data-filter="all"
           >
             <span>All (${counts.all})</span>
-            <span>${state.recallFilter === 'all' ? '✓' : ''}</span>
+            <span>${state.recallFilter === 'all' ? icon('check', 'sm') : ''}</span>
           </button>
           <button
             class="sheet-pill-opt ${state.recallFilter === 'unmastered' ? 'active' : ''}"
@@ -2170,7 +2184,7 @@ function renderModeSpecificSettingsSection(counts) {
             data-filter="unmastered"
           >
             <span>Unmastered (${counts.all - counts.mastered})</span>
-            <span>${state.recallFilter === 'unmastered' ? '✓' : ''}</span>
+            <span>${state.recallFilter === 'unmastered' ? icon('check', 'sm') : ''}</span>
           </button>
         </div>
       </div>
@@ -2183,20 +2197,20 @@ function renderModeSpecificSettingsSection(counts) {
       <div class="sheet-section-label">Quiz Question Style</div>
       <div class="sheet-menu-list">
         ${[
-          ['mixed', '🎲 Mixed Questions (Recommended)'],
-          ['photo-to-name', '🖼️ Photo → Common Name'],
-          ['photo-to-sub', '🔬 Photo → Scientific / Model Name'],
-          ['clues-to-name', '🔎 Field Clues → Common Name']
+          ['mixed', 'dice', 'Mixed questions (recommended)'],
+          ['photo-to-name', 'image', 'Photo to common name'],
+          ['photo-to-sub', 'tag', 'Photo to scientific / model name'],
+          ['clues-to-name', 'search', 'Field clues to common name']
         ]
           .map(
-            ([val, label]) => `
+            ([val, ic, label]) => `
               <button
                 class="sheet-item ${state.quizQuestionType === val ? 'active' : ''}"
                 data-action="set-quiz-type"
                 data-qtype="${val}"
               >
-                <span>${label}</span>
-                <span>${state.quizQuestionType === val ? '✓' : ''}</span>
+                <span class="sheet-item-label">${icon(ic, 'sm')} ${label}</span>
+                <span>${state.quizQuestionType === val ? icon('check', 'sm') : ''}</span>
               </button>
             `
           )
