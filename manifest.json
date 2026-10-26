@@ -4,8 +4,8 @@
   "description": "Modern visual flashcard and multiple-choice trainer for birds, flowers, aircraft, and custom AI-generated decks.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0b1120",
-  "theme_color": "#0f172a",
+  "background_color": "#eef1f6",
+  "theme_color": "#2457f5",
   "orientation": "portrait-primary",
   "icons": [
     {
