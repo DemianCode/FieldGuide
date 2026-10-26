@@ -18,6 +18,9 @@ import { AI_DECK_PROMPT_TEMPLATE } from '../data/starter-decks.js';
 
 const state = {
   view: 'home', // 'home' | 'study'
+  theme: 'system', // 'system' | 'light' | 'dark'
+  activityDays: [],
+  homeSearchOpen: false,
   decks: [],
   progressMap: {},
   cachedCountByDeck: {},
@@ -84,6 +87,115 @@ let touchStartY = null;
 let quizAutoAdvanceTimer = null;
 const cardOrientationMap = new Map();
 const CUSTOM_FOLDERS_KEY = 'fieldguide_custom_folders_v1';
+const THEME_KEY = 'fieldguide_theme_v1';
+const ACTIVITY_KEY = 'fieldguide_activity_v1';
+
+// --- THEME (system | light | dark) ---
+function loadTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark' || saved === 'system') state.theme = saved;
+  } catch (_) {}
+  applyTheme();
+}
+
+function applyTheme() {
+  const root = document.documentElement;
+  if (state.theme === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', state.theme);
+  const bg = getComputedStyle(root).getPropertyValue('--bg-app').trim();
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta && bg) meta.setAttribute('content', bg);
+}
+
+function setTheme(theme) {
+  state.theme = theme;
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch (_) {}
+  applyTheme();
+  render();
+}
+
+// --- DAILY STREAK (days with at least one graded card or quiz answer) ---
+function dayKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function loadActivity() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ACTIVITY_KEY) || '[]');
+    if (Array.isArray(raw)) state.activityDays = raw.filter((k) => typeof k === 'string');
+  } catch (_) {}
+}
+
+function recordActivity() {
+  const today = dayKey();
+  if (state.activityDays.includes(today)) return;
+  state.activityDays = [...state.activityDays, today].slice(-400);
+  try {
+    localStorage.setItem(ACTIVITY_KEY, JSON.stringify(state.activityDays));
+  } catch (_) {}
+}
+
+function getStreak() {
+  const days = new Set(state.activityDays);
+  const cursor = new Date();
+  if (!days.has(dayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  let streak = 0;
+  while (days.has(dayKey(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+// --- INLINE ICONS (consistent across devices, inherit text colour) ---
+const ICON_PATHS = {
+  back: '<path d="M15 18l-6-6 6-6"/>',
+  close: '<path d="M18 6L6 18M6 6l12 12"/>',
+  sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  read: '<path d="M2 5h6a4 4 0 014 4v11a3 3 0 00-3-3H2z"/><path d="M22 5h-6a4 4 0 00-4 4v11a3 3 0 013-3h7z"/>',
+  recall: '<rect x="3" y="7" width="14" height="13" rx="3"/><path d="M7 4h12a2 2 0 012 2v10"/>',
+  quiz: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  x: '<path d="M18 6L6 18M6 6l12 12"/>',
+  flame: '<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 01-10 0c0-2 1-3 2-4 .5 1.5 1.5 2 2 2-.5-3 0-5 1-8z"/>',
+  next: '<path d="M9 6l6 6-6 6"/>',
+  prev: '<path d="M15 6l-6 6 6 6"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M21 13A9 9 0 1111 3a7 7 0 0010 10z"/>',
+  auto: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/>',
+  flip: '<path d="M3 12a9 9 0 0115-6.7L21 8M21 3v5h-5M21 12a9 9 0 01-15 6.7L3 16M3 21v-5h5"/>',
+  shuffle: '<path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
+  folder: '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
+  trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0zM17 5h3v2a3 3 0 01-3 3M7 5H4v2a3 3 0 003 3"/>',
+  external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
+  doc: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7z"/>',
+  pencil: '<path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  clipboard: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 11h6M9 15h6"/>',
+  download: '<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  reset: '<path d="M3 12a9 9 0 109-9 9 9 0 00-6.4 2.6L3 8M3 3v5h5"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-9 9"/>',
+  type: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1"/>',
+  fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  crop: '<path d="M6 2v14a2 2 0 002 2h14M2 6h14a2 2 0 012 2v14"/>',
+  dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="12" cy="12" r="1"/>'
+};
+
+function icon(name, cls = '') {
+  return `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
+}
 
 function loadSavedFolders() {
   try {
@@ -156,7 +268,7 @@ async function assignDeckToFolder(deckId, folderName) {
     state.customFolders.push(cleanFolder);
     saveCustomFolders();
   }
-  showToast(`Moved "${deck.title}" to 📁 ${cleanFolder}`);
+  showToast(`Moved "${deck.title}" to ${cleanFolder}`);
   render();
 }
 
@@ -174,7 +286,7 @@ async function createNewFolder(rawName, deckIdToMove = null) {
   if (deckIdToMove) {
     await assignDeckToFolder(deckIdToMove, clean);
   } else {
-    showToast(`Created folder "📁 ${clean}"`);
+    showToast(`Created folder "${clean}"`);
     render();
   }
 }
@@ -198,7 +310,7 @@ async function renameExistingFolder(oldName, newName) {
   if (state.homeFolderFilter === oldName) state.homeFolderFilter = cleanNew;
   state.renamingFolder = null;
   state.renameFolderInput = '';
-  showToast(`Renamed folder to "📁 ${cleanNew}"`);
+  showToast(`Renamed folder to "${cleanNew}"`);
   render();
 }
 
@@ -245,6 +357,11 @@ function getMediaFrameClass(cardId, extraClass = '') {
 // --- INITIALIZATION ---
 async function initApp() {
   loadSavedFolders();
+  loadTheme();
+  loadActivity();
+  window
+    .matchMedia?.('(prefers-color-scheme: dark)')
+    ?.addEventListener?.('change', () => state.theme === 'system' && applyTheme());
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
@@ -432,7 +549,7 @@ async function cycleBrowseCardStatus(cardId) {
   const nextStatus = nextOrder[current] || 'mastered';
   const updated = await updateCardProgress(cardId, deck.id, nextStatus);
   state.progressMap[cardId] = updated;
-  const labels = { new: 'Marked as New', learning: 'Marked as Still Learning', mastered: 'Marked as Mastered ✓' };
+  const labels = { new: 'Marked as New', learning: 'Marked as Still Learning', mastered: 'Marked as Mastered' };
   showToast(labels[nextStatus]);
   render();
 }
@@ -467,6 +584,7 @@ async function gradeRecallCard(status) {
 
   const updated = await updateCardProgress(card.id, deck.id, status);
   state.progressMap[card.id] = updated;
+  recordActivity();
 
   if (status === 'mastered') state.recallStats.gotIt++;
   else state.recallStats.learning++;
@@ -522,6 +640,7 @@ async function selectQuizOption(optionId) {
   const isCorrect = optionId === currentQ.targetCard.id;
   currentQ.selectedOptionId = optionId;
   currentQ.isCorrect = isCorrect;
+  recordActivity();
 
   if (isCorrect) {
     state.quizScore++;
@@ -536,9 +655,11 @@ async function selectQuizOption(optionId) {
   render();
 
   clearQuizAdvanceTimer();
-  quizAutoAdvanceTimer = setTimeout(() => {
-    nextQuizQuestion();
-  }, isCorrect ? 650 : 950);
+  if (isCorrect) {
+    quizAutoAdvanceTimer = setTimeout(() => {
+      nextQuizQuestion();
+    }, 750);
+  }
 }
 
 function nextQuizQuestion() {
@@ -772,13 +893,16 @@ function render() {
   const selStart = typeof activeEl?.selectionStart === 'number' ? activeEl.selectionStart : null;
   const selEnd = typeof activeEl?.selectionEnd === 'number' ? activeEl.selectionEnd : null;
 
+  const studyDock = state.view === 'study' ? renderStudyDock() : '';
+  const hasDock = Boolean(studyDock.trim());
+
   appRoot.innerHTML = `
     <div class="mobile-shell">
       ${renderTopBar()}
-      <main class="screen-body ${state.view === 'study' ? 'study-layout' : ''}" id="swipe-area">
+      <main class="screen-body ${state.view === 'study' ? 'study-layout' : ''} ${hasDock ? 'has-dock' : ''}" id="swipe-area">
         ${state.view === 'home' ? renderHomeView() : renderStudyView()}
       </main>
-      ${state.view === 'study' ? renderStudyDock() : ''}
+      ${state.view === 'home' ? renderFab() : studyDock}
       ${state.activeSheet ? renderBottomSheet() : ''}
       ${state.lightboxUrl ? renderLightbox() : ''}
     </div>
@@ -798,25 +922,34 @@ function render() {
   }
 }
 
-// --- STICKY TOP BAR (HOME HEADER OR INTEGRATED FOCUSED STUDY HEADER) ---
+function renderFab() {
+  return `
+    <div class="fab-wrap">
+      <button class="fab" data-action="open-add-deck" data-tab="paste" aria-label="Add a new deck">
+        ${icon('plus')}<span>New deck</span>
+      </button>
+    </div>
+  `;
+}
+
+// --- TOP BAR (HOME TITLE OR COMPACT STUDY HEADER) ---
 function renderTopBar() {
   if (state.view === 'home') {
+    const streak = getStreak();
     return `
       <header class="topbar">
         <div class="topbar-main">
-          <div class="brand-mark">
-            <img src="./icons/icon.svg" alt="" class="brand-logo" />
-            <div class="topbar-title-group">
-              <span class="topbar-title">FieldGuide</span>
-              <span class="topbar-subtitle">Visual Recall &amp; Quiz</span>
-            </div>
+          <div class="topbar-title-group">
+            <span class="topbar-title big">Today</span>
           </div>
           <div class="topbar-right">
-            <button class="header-pill-btn" data-action="open-add-deck" data-tab="paste">
-              <span>＋</span>
-              <span>New Deck</span>
+            <span class="streak-pill ${streak ? '' : 'idle'}">
+              ${icon('flame', 'sm')}
+              <span>${streak ? `${streak}-day streak` : 'No streak yet'}</span>
+            </span>
+            <button class="icon-btn" data-action="open-sheet" data-sheet="home-menu" aria-label="Menu">
+              ${icon('more')}
             </button>
-            <button class="icon-btn" data-action="open-sheet" data-sheet="home-menu" aria-label="Menu">⋯</button>
           </div>
         </div>
       </header>
@@ -832,24 +965,20 @@ function renderTopBar() {
     const cards = getFilteredBrowseCards();
     const total = cards.length;
     const cur = total ? Math.min(state.browseIndex + 1, total) : 0;
-    subInfo = total ? `Card ${cur} of ${total}` : 'No matching cards';
+    subInfo = total ? `Read · ${cur} of ${total}` : 'Read · no matching cards';
     progressPct = total ? Math.round((cur / total) * 100) : 0;
     hasActiveFilter = state.browseFilter !== 'all';
   } else if (state.studyMode === 'recall') {
     const total = state.recallQueue.length || 1;
     const cur = state.recallFinished ? total : state.recallIndex + 1;
-    subInfo = state.recallFinished
-      ? 'Session Complete'
-      : `Card ${cur} of ${total} • ${state.recallPromptType === 'image-first' ? 'Photo → Name' : 'Name → Photo'}`;
-    progressPct = state.recallFinished ? 100 : Math.round((cur / total) * 100);
+    subInfo = state.recallFinished ? 'Recall · complete' : `Recall · ${cur} of ${total}`;
+    progressPct = state.recallFinished ? 100 : Math.round(((cur - 1) / total) * 100);
     hasActiveFilter = state.recallFilter !== 'all' || state.recallPromptType !== 'image-first';
   } else if (state.studyMode === 'quiz') {
     const total = state.quizQuestions.length || 1;
     const cur = state.quizFinished ? total : state.quizIndex + 1;
-    subInfo = state.quizFinished
-      ? `Final Score: ${state.quizScore}/${total}`
-      : `Question ${cur} of ${total}${state.quizStreak > 0 ? ` • 🔥 ${state.quizStreak}` : ''}`;
-    progressPct = state.quizFinished ? 100 : Math.round((cur / total) * 100);
+    subInfo = state.quizFinished ? `Quiz · score ${state.quizScore}/${total}` : `Quiz · ${cur} of ${total}`;
+    progressPct = state.quizFinished ? 100 : Math.round(((cur - 1) / total) * 100);
     hasActiveFilter = state.quizQuestionType !== 'mixed';
   }
 
@@ -857,7 +986,7 @@ function renderTopBar() {
     <header class="topbar">
       <div class="topbar-main">
         <div class="topbar-left">
-          <button class="icon-btn" data-action="go-home" aria-label="Back to Decks">←</button>
+          <button class="icon-btn" data-action="go-home" aria-label="Back to decks">${icon('back')}</button>
           <div class="topbar-title-group">
             <div class="topbar-title">${esc(deck?.title || 'Study')}</div>
             <div class="topbar-subtitle">${esc(subInfo)}</div>
@@ -868,43 +997,12 @@ function renderTopBar() {
             class="icon-btn ${hasActiveFilter ? 'has-badge' : ''}"
             data-action="open-sheet"
             data-sheet="study-options"
-            aria-label="Study Options"
-            title="Study Options"
+            aria-label="Mode and options"
           >
-            ⚙️
+            ${icon('sliders')}
           </button>
         </div>
       </div>
-
-      <div class="study-subbar">
-        <div class="mode-segmented" role="tablist" aria-label="Study Mode">
-          <button
-            class="mode-seg-btn ${state.studyMode === 'browse' ? 'active' : ''}"
-            data-action="switch-mode"
-            data-mode="browse"
-          >
-            <span>📖</span>
-            <span>Read</span>
-          </button>
-          <button
-            class="mode-seg-btn ${state.studyMode === 'recall' ? 'active' : ''}"
-            data-action="switch-mode"
-            data-mode="recall"
-          >
-            <span>🔄</span>
-            <span>Recall</span>
-          </button>
-          <button
-            class="mode-seg-btn ${state.studyMode === 'quiz' ? 'active' : ''}"
-            data-action="switch-mode"
-            data-mode="quiz"
-          >
-            <span>🎯</span>
-            <span>Quiz</span>
-          </button>
-        </div>
-      </div>
-
       <div class="session-progress-track">
         <div class="session-progress-fill" style="width:${progressPct}%"></div>
       </div>
@@ -917,296 +1015,143 @@ function renderDeckCard(deck) {
   const counts = getDeckCounts(deck);
   const total = counts.all || 1;
   const mPct = Math.round((counts.mastered / total) * 100);
-  const lPct = Math.round((counts.learning / total) * 100);
-  const cachedCount = state.cachedCountByDeck[deck.id] || 0;
-  const isFullyCached = cachedCount >= deck.cards.length && deck.cards.length > 0;
-  const folderName = getDeckFolder(deck);
 
   return `
-    <article class="deck-card" style="--deck-color:${esc(deck.color)}">
-      <div class="deck-card-main" data-action="open-deck" data-deck="${esc(deck.id)}" data-mode="browse">
-        <div class="deck-avatar">${esc(deck.icon || '🃏')}</div>
-        <div class="deck-info">
-          <div class="deck-title-row">
-            <div class="deck-name">${esc(deck.title)}</div>
-            <button
-              class="deck-more-btn"
-              data-action="open-deck-context"
-              data-deck="${esc(deck.id)}"
-              aria-label="Deck Menu"
-              title="Deck Options &amp; Folder"
-            >
-              ⋯
-            </button>
-          </div>
-          <div class="deck-meta">
-            <span
-              class="deck-folder-pill"
-              data-action="set-home-folder"
-              data-folder="${esc(folderName)}"
-              title="Filter by folder: ${esc(folderName)}"
-            >
-              📁 ${esc(folderName)}
-            </span>
-            <span>${deck.cards.length} cards</span>
-            <span>•</span>
-            <span style="color:${counts.mastered > 0 ? '#34d399' : 'var(--text-muted)'};">
-              ${counts.mastered} mastered
-            </span>
-            ${isFullyCached ? `<span class="offline-pill">✓ Offline</span>` : ''}
-          </div>
-          <div class="mini-progress-track">
-            <div class="mini-progress-fill" style="width:${mPct}%"></div>
-            <div class="mini-progress-learning" style="width:${lPct}%"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="deck-quick-modes">
-        <button class="deck-mode-btn" data-action="open-deck" data-deck="${esc(deck.id)}" data-mode="browse">
-          <span>📖</span>
-          <span>Read</span>
-        </button>
-        <button class="deck-mode-btn" data-action="open-deck" data-deck="${esc(deck.id)}" data-mode="recall">
-          <span>🔄</span>
-          <span>Recall</span>
-        </button>
-        <button class="deck-mode-btn" data-action="open-deck" data-deck="${esc(deck.id)}" data-mode="quiz">
-          <span>🎯</span>
-          <span>Quiz</span>
-        </button>
-      </div>
-    </article>
+    <button
+      class="deck-tile"
+      style="--deck-color:${esc(deck.color || '#2457f5')}"
+      data-action="open-deck-context"
+      data-deck="${esc(deck.id)}"
+      aria-label="${esc(deck.title)}, ${counts.all} cards, ${counts.mastered} mastered"
+    >
+      <span class="deck-tile-top">
+        <span class="deck-avatar">${esc(deck.icon || '🃏')}</span>
+        <span class="deck-ring" style="--p:${mPct}%"></span>
+      </span>
+      <span>
+        <span class="deck-name">${esc(deck.title)}</span>
+        <span class="deck-meta">${counts.all} cards · ${counts.mastered} mastered</span>
+      </span>
+    </button>
   `;
 }
 
-function renderHomeView() {
-  const folderStats = getFolderStatsList();
-  const filteredDecks = getFilteredHomeDecks();
-  const overviewSourceDecks =
-    state.homeFolderFilter === 'all'
-      ? state.decks
-      : state.decks.filter((d) => getDeckFolder(d) === state.homeFolderFilter);
-
-  let totalCards = 0;
-  let masteredCount = 0;
-  let learningCount = 0;
-
-  for (const deck of overviewSourceDecks) {
-    for (const c of deck.cards || []) {
-      totalCards++;
-      const st = getCardStatus(c.id);
-      if (st === 'mastered') masteredCount++;
-      else if (st === 'learning') learningCount++;
+function getPracticePlan() {
+  let total = 0;
+  let mastered = 0;
+  let bestDeck = null;
+  let bestOpen = 0;
+  for (const deck of state.decks) {
+    const c = getDeckCounts(deck);
+    total += c.all;
+    mastered += c.mastered;
+    const open = c.all - c.mastered;
+    if (open > bestOpen) {
+      bestOpen = open;
+      bestDeck = deck;
     }
   }
-  const newCount = Math.max(0, totalCards - masteredCount - learningCount);
-  const overallPct = totalCards ? Math.round((masteredCount / totalCards) * 100) : 0;
+  return { total, mastered, open: total - mastered, deck: bestDeck };
+}
 
-  // Build grouped or flat deck HTML
+function renderHomeView() {
+  const folderStats = getFolderStatsList().filter((f) => f.count > 0);
+  const filteredDecks = getFilteredHomeDecks();
+  const plan = getPracticePlan();
+  const streak = getStreak();
+  const masteredPct = plan.total ? (plan.mastered / plan.total) * 100 : 0;
+
+  const eyebrow = plan.open > 0 ? `${plan.open} ${plan.open === 1 ? 'card' : 'cards'} to practice` : 'Everything mastered';
+  const headline =
+    plan.open === 0 ? 'Test yourself again' : streak > 0 ? 'Keep your streak going' : 'Start today’s practice';
+
   let deckContentHtml = '';
   if (!filteredDecks.length) {
     deckContentHtml = `
-      <div class="study-card" style="padding:32px 18px;text-align:center;gap:10px;">
-        <div style="font-size:2rem;">📁</div>
-        <h3 style="font-size:1rem;font-weight:750;">No matching sets found</h3>
-        <p style="font-size:0.84rem;color:var(--text-muted);">
+      <div class="study-card message finish-panel">
+        <h3 style="font-size:1.1rem;font-weight:800;">No matching decks</h3>
+        <p style="font-size:0.95rem;color:var(--text-muted);">
           ${
             state.homeSearchQuery
-              ? `No decks or cards matched "${esc(state.homeSearchQuery)}".`
-              : `Folder "${esc(state.homeFolderFilter)}" has no sets yet.`
+              ? `Nothing matched “${esc(state.homeSearchQuery)}”.`
+              : `Folder “${esc(state.homeFolderFilter)}” has no decks yet.`
           }
         </p>
-        <div style="display:flex;justify-content:center;gap:8px;margin-top:4px;flex-wrap:wrap;">
+        <div class="finish-actions">
           ${
             state.homeFolderFilter !== 'all' || state.homeSearchQuery
-              ? `<button class="btn btn-secondary" data-action="reset-home-filters" style="padding:9px 14px;font-size:0.82rem;">
-                  Show All Sets (${state.decks.length})
-                </button>`
+              ? `<button class="btn btn-secondary" data-action="reset-home-filters">Show all decks (${state.decks.length})</button>`
               : ''
           }
-          <button class="btn btn-primary" data-action="open-add-deck" data-tab="paste" style="padding:9px 14px;font-size:0.82rem;">
-            ＋ Add Deck Here
-          </button>
+          <button class="btn btn-primary" data-action="open-add-deck" data-tab="paste">Add a deck</button>
         </div>
       </div>
     `;
-  } else if (state.homeFolderFilter === 'all' && state.homeGroupByFolder) {
-    const groupsMap = new Map();
-    for (const deck of filteredDecks) {
-      const folder = getDeckFolder(deck);
-      if (!groupsMap.has(folder)) groupsMap.set(folder, []);
-      groupsMap.get(folder).push(deck);
-    }
-
-    deckContentHtml = Array.from(groupsMap.entries())
-      .map(([folderName, decksInFolder]) => {
-        const isCollapsed = Boolean(state.collapsedFolders[folderName]) && !state.homeSearchQuery.trim();
-        let fCards = 0;
-        let fMastered = 0;
-        for (const d of decksInFolder) {
-          const c = getDeckCounts(d);
-          fCards += c.all;
-          fMastered += c.mastered;
-        }
-
-        return `
-          <section class="folder-group ${isCollapsed ? 'collapsed' : ''}">
-            <button
-              class="folder-group-header"
-              data-action="toggle-collapse-folder"
-              data-folder="${esc(folderName)}"
-              aria-expanded="${!isCollapsed}"
-            >
-              <div class="folder-group-left">
-                <span>📁</span>
-                <span class="folder-group-name">${esc(folderName)}</span>
-              </div>
-              <div class="folder-group-right">
-                <span>${decksInFolder.length} ${decksInFolder.length === 1 ? 'set' : 'sets'} • ${fMastered}/${fCards} ✓</span>
-                <span class="folder-chevron">▾</span>
-              </div>
-            </button>
-            ${
-              !isCollapsed
-                ? `<div class="deck-list">${decksInFolder.map((d) => renderDeckCard(d)).join('')}</div>`
-                : ''
-            }
-          </section>
-        `;
-      })
-      .join('');
   } else {
-    deckContentHtml = `
-      <div class="deck-list">
-        ${filteredDecks.map((d) => renderDeckCard(d)).join('')}
-      </div>
-    `;
+    deckContentHtml = `<div class="deck-grid">${filteredDecks.map((d) => renderDeckCard(d)).join('')}</div>`;
   }
 
   return `
-    <section class="hero-progress-card">
-      <div class="hero-top-row">
-        <div>
-          <div class="hero-title">
-            ${state.homeFolderFilter === 'all' ? 'Study Overview' : `📁 ${esc(state.homeFolderFilter)}`}
-          </div>
-          <div class="hero-headline">${masteredCount} of ${totalCards} Mastered</div>
-        </div>
-        <div class="hero-pct-badge">${overallPct}%</div>
+    <section class="today-card" aria-label="Today's practice">
+      <div>
+        <div class="today-eyebrow">${eyebrow}</div>
+        <div class="today-headline">${headline}</div>
       </div>
-      <div class="mini-progress-track" style="height:6px;">
-        <div class="mini-progress-fill" style="width:${totalCards ? (masteredCount / totalCards) * 100 : 0}%"></div>
-        <div class="mini-progress-learning" style="width:${totalCards ? (learningCount / totalCards) * 100 : 0}%"></div>
-      </div>
-      <div class="hero-stats-grid">
-        <div class="hero-stat-pill">
-          <span class="hero-stat-val" style="color:#34d399;">${masteredCount}</span>
-          <span class="hero-stat-lbl">Mastered</span>
-        </div>
-        <div class="hero-stat-pill">
-          <span class="hero-stat-val" style="color:#fbbf24;">${learningCount}</span>
-          <span class="hero-stat-lbl">Learning</span>
-        </div>
-        <div class="hero-stat-pill">
-          <span class="hero-stat-val" style="color:#94a3b8;">${newCount}</span>
-          <span class="hero-stat-lbl">Unseen</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="home-organizer" aria-label="Organize and filter decks">
-      <div class="home-search-row">
-        <div class="home-search-wrap">
-          <span class="home-search-icon">🔍</span>
-          <input
-            type="search"
-            id="home-search-input"
-            class="home-search-input"
-            placeholder="Filter sets or cards..."
-            value="${esc(state.homeSearchQuery)}"
-          />
-          ${
-            state.homeSearchQuery
-              ? `<button class="home-search-clear" data-action="clear-home-search" title="Clear search">✕</button>`
-              : ''
-          }
-        </div>
-        ${
-          state.homeFolderFilter === 'all'
-            ? `<button
-                class="home-org-btn ${state.homeGroupByFolder ? 'active' : ''}"
-                data-action="toggle-folder-grouping"
-                title="Group sets by folder"
-              >
-                <span>${state.homeGroupByFolder ? '📁 Grouped' : '☰ List'}</span>
-              </button>`
-            : ''
-        }
-        <button
-          class="home-org-btn"
-          data-action="open-sheet"
-          data-sheet="manage-folders"
-          title="Create or manage folders"
-        >
-          <span>📁+</span>
-        </button>
-      </div>
-
-      <div class="study-filter-strip" role="tablist" aria-label="Folders">
-        <button
-          class="filter-chip ${state.homeFolderFilter === 'all' ? 'active' : ''}"
-          data-action="set-home-folder"
-          data-folder="all"
-        >
-          <span>All Sets</span>
-          <span class="filter-chip-count">${state.decks.length}</span>
-        </button>
-        ${folderStats
-          .map(
-            (f) => `
-              <button
-                class="filter-chip ${state.homeFolderFilter === f.name ? 'active' : ''}"
-                data-action="set-home-folder"
-                data-folder="${esc(f.name)}"
-              >
-                <span>📁 ${esc(f.name)}</span>
-                <span class="filter-chip-count">${f.count}</span>
-              </button>
-            `
-          )
-          .join('')}
-        <button
-          class="filter-chip"
-          data-action="open-sheet"
-          data-sheet="manage-folders"
-          style="border-style:dashed;"
-        >
-          <span>＋ Folder</span>
-        </button>
-      </div>
+      <div class="today-bar" aria-hidden="true"><span style="width:${masteredPct}%"></span></div>
+      <div class="today-eyebrow" style="margin-top:-6px;">${plan.mastered} of ${plan.total} mastered</div>
+      ${
+        plan.deck
+          ? `<button class="cta-btn" data-action="practice-now" data-deck="${esc(plan.deck.id)}">Practice now</button>`
+          : state.decks[0]
+          ? `<button class="cta-btn" data-action="open-deck" data-deck="${esc(state.decks[0].id)}" data-mode="quiz">Take a quiz</button>`
+          : ''
+      }
     </section>
 
     <div class="section-header-row">
-      <span class="section-heading">
-        ${
-          state.homeFolderFilter === 'all'
-            ? `Your Field Sets (${filteredDecks.length})`
-            : `📁 ${esc(state.homeFolderFilter)} (${filteredDecks.length})`
-        }
-      </span>
-      ${
-        state.homeFolderFilter !== 'all' || state.homeSearchQuery
-          ? `<button
-              class="hint-pill-btn"
-              data-action="reset-home-filters"
-              style="font-size:0.7rem;padding:2px 9px;"
-            >
-              Show All (${state.decks.length})
-            </button>`
-          : ''
-      }
+      <span class="section-heading">Decks</span>
+      <button class="icon-btn" data-action="toggle-home-search" aria-label="Search decks" aria-expanded="${state.homeSearchOpen || Boolean(state.homeSearchQuery)}">
+        ${icon('search')}
+      </button>
     </div>
+
+    ${
+      state.homeSearchOpen || state.homeSearchQuery
+        ? `<div class="home-search-wrap">
+            <span class="home-search-icon">${icon('search', 'sm')}</span>
+            <input
+              type="search"
+              id="home-search-input"
+              class="home-search-input"
+              placeholder="Search decks or cards"
+              value="${esc(state.homeSearchQuery)}"
+            />
+            ${
+              state.homeSearchQuery
+                ? `<button class="home-search-clear" data-action="clear-home-search" aria-label="Clear search">${icon('close', 'sm')}</button>`
+                : ''
+            }
+          </div>`
+        : ''
+    }
+
+    ${
+      folderStats.length > 1
+        ? `<div class="study-filter-strip" aria-label="Folders">
+            <button class="filter-chip ${state.homeFolderFilter === 'all' ? 'active' : ''}" data-action="set-home-folder" data-folder="all">
+              All <span class="filter-chip-count">${state.decks.length}</span>
+            </button>
+            ${folderStats
+              .map(
+                (f) => `
+                  <button class="filter-chip ${state.homeFolderFilter === f.name ? 'active' : ''}" data-action="set-home-folder" data-folder="${esc(f.name)}">
+                    ${esc(f.name)} <span class="filter-chip-count">${f.count}</span>
+                  </button>`
+              )
+              .join('')}
+          </div>`
+        : ''
+    }
 
     ${deckContentHtml}
   `;
@@ -1222,44 +1167,80 @@ function renderStudyView() {
   return renderQuizMode(deck);
 }
 
-// --- 1. FOCUSED READ / BROWSE MODE ---
+// --- SHARED STUDY PIECES ---
+function renderMediaFrame(card, deck, { cls = '', badge = false, status = false, alt = '', caption = '', zoom = true } = {}) {
+  const imgSrc = getBestCardImageSrc(card, deck.color);
+  const st = getCardStatus(card.id);
+  const statusLabel =
+    st === 'mastered' ? `${icon('check', 'xs')} Mastered` : st === 'learning' ? 'Learning' : 'Unseen';
+  const showTop = (badge && card.badge) || status;
+  return `
+    <div class="${getMediaFrameClass(card.id, cls)}" style="--media-bg: url(&quot;${esc(imgSrc)}&quot;)">
+      <img
+        src="${esc(imgSrc)}"
+        alt="${esc(alt)}"
+        data-card-id="${esc(card.id)}"
+        class="media-img ${state.imageFitContain ? 'contain' : ''}"
+        ${zoom ? `data-action="open-lightbox" data-caption="${esc(caption)}"` : 'style="cursor:pointer"'}
+      />
+      ${
+        showTop
+          ? `<div class="media-overlay-top">
+              ${badge && card.badge ? `<span class="media-badge">${esc(card.badge)}</span>` : `<span></span>`}
+              ${
+                status
+                  ? `<button class="status-pill-btn ${st}" data-action="cycle-card-status" data-card="${esc(card.id)}" aria-label="Change status, currently ${st}">${statusLabel}</button>`
+                  : ''
+              }
+            </div>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderCardDetails(card, { aboutLabel = 'About', showLink = true } = {}) {
+  return `
+    ${
+      card.keyFeatures
+        ? `<div class="info-block key-marks">
+            <div class="info-block-label">Look for</div>
+            <div style="color:var(--text-main);">${esc(card.keyFeatures)}</div>
+          </div>`
+        : ''
+    }
+    ${
+      card.description
+        ? `<div class="info-block">
+            <div class="info-block-label">${aboutLabel}</div>
+            <div>${esc(card.description)}</div>
+          </div>`
+        : ''
+    }
+    ${
+      showLink && card.sourceUrl
+        ? `<div class="card-footer-row">
+            <a href="${esc(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="source-link">
+              <span>Wikipedia</span>${icon('external', 'xs')}
+            </a>
+          </div>`
+        : ''
+    }
+  `;
+}
+
+// --- 1. READ MODE: PHOTO FIRST, NOTES IN A SHEET BELOW ---
 function renderBrowseMode(deck) {
   const counts = getDeckCounts(deck);
   const cards = getFilteredBrowseCards();
 
-  const filterStripHtml = `
-    <div class="study-filter-strip" aria-label="Filter cards by status">
-      ${[
-        ['all', 'All', counts.all],
-        ['new', 'Unseen', counts.new],
-        ['learning', 'Learning', counts.learning],
-        ['mastered', 'Mastered', counts.mastered]
-      ]
-        .map(
-          ([key, label, count]) => `
-            <button
-              class="filter-chip ${state.browseFilter === key ? 'active' : ''}"
-              data-action="set-browse-filter"
-              data-filter="${key}"
-            >
-              <span>${label}</span>
-              <span class="filter-chip-count">${count}</span>
-            </button>
-          `
-        )
-        .join('')}
-    </div>
-  `;
-
   if (!cards.length) {
     return `
-      ${filterStripHtml}
-      <div class="study-card" style="padding:38px 20px;text-align:center;gap:12px;">
-        <div style="font-size:2.2rem;">🔍</div>
-        <h3 style="font-size:1.05rem;font-weight:700;">No "${esc(state.browseFilter)}" cards right now</h3>
-        <p style="color:var(--text-muted);font-size:0.85rem;">Switch back to All Cards to continue reading.</p>
-        <div style="margin-top:4px;">
-          <button class="btn btn-secondary" data-action="reset-browse-filter">Show All (${counts.all})</button>
+      <div class="study-card message finish-panel">
+        <h3 style="font-size:1.1rem;font-weight:800;">No ${esc(state.browseFilter)} cards right now</h3>
+        <p style="color:var(--text-muted);font-size:0.95rem;">Switch back to all cards to keep reading.</p>
+        <div class="finish-actions">
+          <button class="btn btn-primary" data-action="reset-browse-filter">Show all (${counts.all})</button>
         </div>
       </div>
     `;
@@ -1267,119 +1248,42 @@ function renderBrowseMode(deck) {
 
   if (state.browseIndex >= cards.length) state.browseIndex = 0;
   const card = cards[state.browseIndex];
-  const imgSrc = getBestCardImageSrc(card, deck.color);
-  const status = getCardStatus(card.id);
-  const statusLabel =
-    status === 'mastered' ? '✓ Mastered' : status === 'learning' ? '◐ Learning' : '○ Unseen';
 
   return `
-    ${filterStripHtml}
-
-    <article class="study-card">
-      <div class="${getMediaFrameClass(card.id)}" style="--media-bg: url(&quot;${esc(imgSrc)}&quot;)">
-        <img
-          src="${esc(imgSrc)}"
-          alt="${esc(card.name)}"
-          data-card-id="${esc(card.id)}"
-          class="media-img ${state.imageFitContain ? 'contain' : ''}"
-          data-action="open-lightbox"
-          data-caption="${esc(card.name)}"
-        />
-        <div class="media-overlay-top">
-          ${card.badge ? `<span class="media-badge">${esc(card.badge)}</span>` : `<span></span>`}
-          <button
-            class="status-pill-btn ${status}"
-            data-action="cycle-card-status"
-            data-card="${esc(card.id)}"
-            title="Tap to change mastery status"
-          >
-            ${statusLabel}
-          </button>
+    <article class="study-card flush" style="flex:1;">
+      ${renderMediaFrame(card, deck, { badge: true, status: true, alt: card.name, caption: card.name })}
+      <div class="card-body sheet-card" style="flex:1;">
+        <div>
+          <h2 class="card-title">${esc(card.name)}</h2>
+          ${card.subtitle ? `<div class="card-subtitle">${esc(card.subtitle)}</div>` : ''}
         </div>
-        <div class="media-overlay-bottom">
-          <button
-            class="media-ctrl-btn"
-            data-action="open-lightbox"
-            data-src="${esc(imgSrc)}"
-            data-caption="${esc(card.name)}"
-          >
-            🔍 Zoom
-          </button>
-          <button class="media-ctrl-btn" data-action="toggle-fit">
-            ${state.imageFitContain ? '⛶ Crop' : '◱ Fit'}
-          </button>
-        </div>
-      </div>
-
-      <div class="card-body">
-        <div class="card-header-block">
-          <div>
-            <h2 class="card-title">${esc(card.name)}</h2>
-            ${card.subtitle ? `<div class="card-subtitle">${esc(card.subtitle)}</div>` : ''}
-          </div>
-        </div>
-
-        ${
-          card.keyFeatures
-            ? `<div class="info-block key-marks">
-                <div class="info-block-label">✦ Key Identification Marks</div>
-                <div style="color:var(--text-main);">${esc(card.keyFeatures)}</div>
-              </div>`
-            : ''
-        }
-
-        ${
-          card.description
-            ? `<div class="info-block">
-                <div class="info-block-label">Field Notes &amp; Overview</div>
-                <div>${esc(card.description)}</div>
-              </div>`
-            : ''
-        }
-
-        <div class="card-footer-row">
-          ${
-            card.sourceUrl
-              ? `<a href="${esc(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="source-link">
-                  <span>Wikipedia Reference</span>
-                  <span>↗</span>
-                </a>`
-              : `<span></span>`
-          }
-          <span class="swipe-hint-lbl">Swipe ⇄ for next</span>
-        </div>
+        ${renderCardDetails(card, { aboutLabel: 'Field notes' })}
       </div>
     </article>
   `;
 }
 
-// --- 2. FOCUSED RECALL MODE (2-STAGE ACTIVE RECALL WITHOUT SCROLL TRAP) ---
+// --- 2. RECALL MODE: REVEAL, THEN SWIPE TO GRADE ---
 function renderRecallMode(deck) {
   if (state.recallFinished) {
     const total = state.recallStats.gotIt + state.recallStats.learning || 1;
     const pct = Math.round((state.recallStats.gotIt / total) * 100);
     return `
-      <div class="study-card" style="padding:36px 20px;text-align:center;gap:14px;">
-        <div style="font-size:3rem;">🎉</div>
-        <h2 class="card-title">Recall Session Complete</h2>
-        <p style="color:var(--text-sub);font-size:0.9rem;">
-          Mastered: <strong style="color:var(--success);">${state.recallStats.gotIt}</strong> •
-          Needs Review: <strong style="color:var(--warning);">${state.recallStats.learning}</strong> (${pct}%)
+      <div class="study-card message finish-panel">
+        <div class="finish-score">${pct}%</div>
+        <h2 class="card-title" style="font-size:1.3rem;">Session complete</h2>
+        <p style="color:var(--text-sub);font-size:1rem;">
+          <strong style="color:var(--success-text);">${state.recallStats.gotIt}</strong> got it ·
+          <strong style="color:var(--warning-text);">${state.recallStats.learning}</strong> to review
         </p>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
-          <button class="btn btn-primary" data-action="restart-recall" data-shuffle="true">
-            🔀 Shuffle &amp; Practice Again
-          </button>
+        <div class="finish-actions">
           ${
             state.recallStats.learning > 0
-              ? `<button class="btn btn-warning" data-action="practice-unmastered-recall">
-                  🎯 Focus on ${state.recallStats.learning} Unmastered Card(s)
-                </button>`
+              ? `<button class="btn btn-primary" data-action="practice-unmastered-recall">Review ${state.recallStats.learning} missed</button>`
               : ''
           }
-          <button class="btn btn-secondary" data-action="switch-mode" data-mode="quiz">
-            🎯 Test Yourself in Quiz Mode
-          </button>
+          <button class="btn btn-secondary" data-action="restart-recall" data-shuffle="true">Shuffle and go again</button>
+          <button class="btn btn-secondary" data-action="switch-mode" data-mode="quiz">Test yourself in a quiz</button>
         </div>
       </div>
     `;
@@ -1387,291 +1291,129 @@ function renderRecallMode(deck) {
 
   const card = state.recallQueue[state.recallIndex];
   if (!card) return '';
-  const imgSrc = getBestCardImageSrc(card, deck.color);
-
-  // Quick context bar so user can flip prompt type or shuffle with 1 tap
-  const contextStrip = `
-    <div class="study-filter-strip">
-      <button
-        class="filter-chip ${state.recallPromptType === 'image-first' ? 'active' : ''}"
-        data-action="set-recall-prompt"
-        data-prompt="image-first"
-      >
-        🖼️ Photo First
-      </button>
-      <button
-        class="filter-chip ${state.recallPromptType === 'name-first' ? 'active' : ''}"
-        data-action="set-recall-prompt"
-        data-prompt="name-first"
-      >
-        🔤 Name First
-      </button>
-      <button
-        class="filter-chip ${state.recallFilter === 'unmastered' ? 'active' : ''}"
-        data-action="toggle-recall-filter"
-      >
-        🎯 Unmastered Only
-      </button>
-      <button class="filter-chip" data-action="restart-recall" data-shuffle="true">
-        🔀 Shuffle
-      </button>
-    </div>
-  `;
 
   if (!state.recallFlipped) {
     const hintText =
       state.recallPromptType === 'image-first'
         ? card.keyFeatures || card.badge || 'Look closely at its silhouette and markings.'
         : card.badge
-        ? `Group / Family: ${card.badge}${card.subtitle ? ` (${card.subtitle})` : ''}`
-        : card.keyFeatures || 'Visualize its defining traits.';
+        ? `Group: ${card.badge}${card.subtitle ? ` (${card.subtitle})` : ''}`
+        : card.keyFeatures || 'Picture its defining traits.';
 
     return `
-      ${contextStrip}
-      <div class="recall-card-shell">
-        <article class="recall-prompt-card" data-action="flip-card">
-          ${
-            state.recallPromptType === 'image-first'
-              ? `
-                <div class="${getMediaFrameClass(card.id, 'tall')}" style="--media-bg: url(&quot;${esc(imgSrc)}&quot;)">
-                  <img
-                    src="${esc(imgSrc)}"
-                    alt="Mystery subject"
-                    data-card-id="${esc(card.id)}"
-                    class="media-img ${state.imageFitContain ? 'contain' : ''}"
-                  />
-                  <div class="media-overlay-top">
-                    ${card.badge ? `<span class="media-badge">${esc(card.badge)}</span>` : `<span></span>`}
-                    <button class="media-ctrl-btn" data-action="toggle-fit">
-                      ${state.imageFitContain ? '⛶ Crop' : '◱ Fit'}
-                    </button>
-                  </div>
-                  <div class="media-overlay-bottom">
-                    <button
-                      class="media-ctrl-btn"
-                      data-action="open-lightbox"
-                      data-src="${esc(imgSrc)}"
-                      data-caption="Mystery Subject"
-                    >
-                      🔍 Zoom
-                    </button>
-                    <span></span>
-                  </div>
-                </div>
-                <div style="padding:16px 16px 12px;text-align:center;">
-                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:4px;">
-                    Active Recall Prompt
-                  </div>
-                  <div style="font-size:1.08rem;font-weight:750;color:var(--text-main);">
-                    Can you name this subject &amp; its key traits?
-                  </div>
-                </div>
-              `
-              : `
-                <div style="min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px;text-align:center;gap:10px;">
-                  ${card.badge ? `<span class="source-link">${esc(card.badge)}</span>` : ''}
-                  <h2 style="font-size:1.65rem;font-weight:800;line-height:1.2;">${esc(card.name)}</h2>
-                  <p style="font-size:0.88rem;color:var(--text-muted);max-width:280px;">
-                    Picture its visual appearance, scientific/model name, and key identification marks.
-                  </p>
-                </div>
-              `
-          }
-
-          ${
-            state.recallShowHint
-              ? `<div class="recall-hint-box">
-                  <strong>💡 Hint:</strong> ${esc(hintText)}
-                </div>`
-              : ''
-          }
-
-          <div class="recall-prompt-footer">
-            <span class="recall-prompt-instruction">Tap card or button below to reveal ↻</span>
+      <div class="stage">
+        <div class="recall-card-shell">
+          <article class="recall-prompt-card" data-action="flip-card">
             ${
-              !state.recallShowHint
-                ? `<button class="hint-pill-btn" data-action="show-recall-hint">💡 Hint</button>`
-                : ''
+              state.recallPromptType === 'image-first'
+                ? `${renderMediaFrame(card, deck, { cls: 'tall', badge: true, alt: 'Mystery subject', zoom: false })}
+                   <div class="recall-prompt-title">What is this?</div>`
+                : `<div style="min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px;text-align:center;gap:12px;">
+                    ${card.badge ? `<span class="source-link">${esc(card.badge)}</span>` : ''}
+                    <h2 style="font-size:2rem;font-weight:850;line-height:1.15;letter-spacing:-0.02em;">${esc(card.name)}</h2>
+                    <p style="font-size:0.98rem;color:var(--text-muted);max-width:290px;">
+                      Picture how it looks and what sets it apart.
+                    </p>
+                  </div>`
             }
-          </div>
-        </article>
+            ${state.recallShowHint ? `<div class="recall-hint-box"><strong>Hint:</strong> ${esc(hintText)}</div>` : ''}
+            <div class="recall-prompt-footer">
+              <span class="recall-prompt-instruction">Tap the card to reveal</span>
+              ${
+                !state.recallShowHint
+                  ? `<button class="hint-pill-btn" data-action="show-recall-hint">${icon('bulb', 'xs')} Hint</button>`
+                  : ''
+              }
+            </div>
+          </article>
+        </div>
       </div>
     `;
   }
 
-  // Stage 2: Answer Revealed
   return `
-    ${contextStrip}
-    <div class="recall-card-shell">
-      <article class="recall-answer-card">
-        <div class="${getMediaFrameClass(card.id, 'compact')}" style="--media-bg: url(&quot;${esc(imgSrc)}&quot;)">
-          <img
-            src="${esc(imgSrc)}"
-            alt="${esc(card.name)}"
-            data-card-id="${esc(card.id)}"
-            class="media-img ${state.imageFitContain ? 'contain' : ''}"
-            data-action="open-lightbox"
-            data-caption="${esc(card.name)}"
-          />
-          <div class="media-overlay-top">
-            ${card.badge ? `<span class="media-badge">${esc(card.badge)}</span>` : `<span></span>`}
-            <button class="media-ctrl-btn" data-action="flip-card">
-              ↺ Flip to Prompt
-            </button>
+    <div class="stage">
+      <div class="recall-card-shell" id="recall-swipe">
+        <span class="swipe-stamp again" id="stamp-again">Still learning</span>
+        <span class="swipe-stamp got" id="stamp-got">Got it</span>
+        <article class="recall-answer-card" id="recall-answer">
+          ${renderMediaFrame(card, deck, { cls: 'compact', badge: true, alt: card.name, caption: card.name })}
+          <div class="card-body" style="padding-bottom:18px;">
+            <div>
+              <h2 class="card-title">${esc(card.name)}</h2>
+              ${card.subtitle ? `<div class="card-subtitle">${esc(card.subtitle)}</div>` : ''}
+            </div>
+            ${renderCardDetails(card)}
           </div>
-          <div class="media-overlay-bottom">
-            <button
-              class="media-ctrl-btn"
-              data-action="open-lightbox"
-              data-src="${esc(imgSrc)}"
-              data-caption="${esc(card.name)}"
-            >
-              🔍 Zoom
-            </button>
-            <button class="media-ctrl-btn" data-action="toggle-fit">
-              ${state.imageFitContain ? '⛶ Crop' : '◱ Fit'}
-            </button>
-          </div>
-        </div>
-
-        <div class="card-body">
-          <div>
-            <h2 class="card-title">${esc(card.name)}</h2>
-            ${card.subtitle ? `<div class="card-subtitle">${esc(card.subtitle)}</div>` : ''}
-          </div>
-
-          ${
-            card.keyFeatures
-              ? `<div class="info-block key-marks">
-                  <div class="info-block-label">✦ Key Identification Marks</div>
-                  <div style="color:var(--text-main);">${esc(card.keyFeatures)}</div>
-                </div>`
-              : ''
-          }
-
-          ${
-            card.description
-              ? `<div class="info-block">
-                  <div class="info-block-label">About</div>
-                  <div>${esc(card.description)}</div>
-                </div>`
-              : ''
-          }
-
-          ${
-            card.sourceUrl
-              ? `<div class="card-footer-row">
-                  <a href="${esc(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="source-link">
-                    <span>Wikipedia Reference</span>
-                    <span>↗</span>
-                  </a>
-                </div>`
-              : ''
-          }
-        </div>
-      </article>
+        </article>
+      </div>
     </div>
   `;
 }
 
-// --- 3. FOCUSED QUIZ MODE ---
+// --- 3. QUIZ MODE: PHOTO OR CLUES ON TOP, ANSWERS BELOW ---
 function renderQuizMode(deck) {
   const lastIdx = getLastAnsweredQuizIndex();
   const qPromptLabels = {
-    'photo-to-name': 'Identify from Photo',
-    'photo-to-sub': 'Identify Scientific / Model Name',
-    'clues-to-name': 'Identify from Field Clues'
+    'photo-to-name': 'From the photo',
+    'photo-to-sub': 'Scientific / model name',
+    'clues-to-name': 'From the clues'
   };
-  const optionLetters = ['A', 'B', 'C', 'D'];
+  const qQuestions = {
+    'photo-to-name': 'Which one is this?',
+    'photo-to-sub': 'What is its scientific or model name?',
+    'clues-to-name': 'Which one fits these clues?'
+  };
 
-  // Viewing the last answered question
-  if (state.quizViewingLast && lastIdx >= 0) {
-    const lastQ = state.quizQuestions[lastIdx];
-    const { targetCard, options, qType, selectedOptionId, isCorrect } = lastQ;
-    const imgSrc = getBestCardImageSrc(targetCard, deck.color);
-
+  const renderOptions = (q, answered, revealSelected) => {
+    const { targetCard, options, qType } = q;
     return `
-      <article class="study-card">
-        <div class="quiz-prompt-banner" style="background:${isCorrect ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)'};">
-          <span>Last Question (${lastIdx + 1} of ${state.quizQuestions.length})</span>
-          <span style="color:${isCorrect ? '#34d399' : '#f87171'};font-weight:800;">
-            ${isCorrect ? '✓ Got It Right' : '✕ Got It Wrong'}
-          </span>
-        </div>
-
-        <div class="${getMediaFrameClass(targetCard.id, 'quiz-frame')}" style="--media-bg: url(&quot;${esc(imgSrc)}&quot;)">
-          <img
-            src="${esc(imgSrc)}"
-            alt="${esc(targetCard.name)}"
-            data-card-id="${esc(targetCard.id)}"
-            class="media-img ${state.imageFitContain ? 'contain' : ''}"
-            data-action="open-lightbox"
-            data-caption="${esc(targetCard.name)}"
-          />
-          <div class="media-overlay-bottom">
-            <button
-              class="media-ctrl-btn"
-              data-action="open-lightbox"
-              data-src="${esc(imgSrc)}"
-              data-caption="${esc(targetCard.name)}"
-            >
-              🔍 Zoom
-            </button>
-            <button class="media-ctrl-btn" data-action="toggle-fit">
-              ${state.imageFitContain ? '⛶ Crop' : '◱ Fit'}
-            </button>
-          </div>
-        </div>
-
-        <div class="quiz-options">
-          ${options
-            .map((opt, idx) => {
-              let cls = 'quiz-opt';
-              let keyBadge = optionLetters[idx] || String(idx + 1);
+      <div class="quiz-options">
+        ${options
+          .map((opt) => {
+            let cls = 'quiz-opt';
+            let keyBadge = '';
+            if (answered) {
               if (opt.id === targetCard.id) {
                 cls += ' correct';
-                keyBadge = '✓';
-              } else if (opt.id === selectedOptionId) {
+                keyBadge = icon('check', 'xs');
+              } else if (opt.id === revealSelected) {
                 cls += ' wrong';
-                keyBadge = '✕';
+                keyBadge = icon('x', 'xs');
               }
-              const mainText = qType === 'photo-to-sub' && opt.subtitle ? opt.subtitle : opt.name;
-              const subText = qType === 'photo-to-sub' ? opt.name : opt.subtitle || '';
+            }
+            const mainText = qType === 'photo-to-sub' && opt.subtitle ? opt.subtitle : opt.name;
+            const subText = qType === 'photo-to-sub' ? (answered ? opt.name : '') : opt.subtitle || '';
+            return `
+              <button
+                class="${cls}"
+                ${answered ? 'disabled' : `data-action="quiz-answer" data-option="${esc(opt.id)}"`}
+              >
+                <div class="quiz-opt-content">
+                  <span class="quiz-opt-title">${esc(mainText)}</span>
+                  ${subText ? `<span class="quiz-opt-sub">${esc(subText)}</span>` : ''}
+                </div>
+                <span class="quiz-opt-key">${keyBadge}</span>
+              </button>
+            `;
+          })
+          .join('')}
+      </div>
+    `;
+  };
 
-              return `
-                <button class="${cls}" disabled>
-                  <span class="quiz-opt-key">${keyBadge}</span>
-                  <div class="quiz-opt-content">
-                    <span class="quiz-opt-title">${esc(mainText)}</span>
-                    ${subText ? `<span class="quiz-opt-sub">${esc(subText)}</span>` : ''}
-                  </div>
-                </button>
-              `;
-            })
-            .join('')}
-        </div>
-
-        <div class="card-body" style="padding-top:0;">
-          ${
-            targetCard.keyFeatures || targetCard.description
-              ? `<div class="info-block key-marks">
-                  <div class="info-block-label">✦ ${esc(targetCard.name)} — Key Clues</div>
-                  <div style="color:var(--text-main);">${esc(targetCard.keyFeatures || targetCard.description)}</div>
-                </div>`
-              : ''
-          }
-          ${
-            targetCard.sourceUrl
-              ? `<div class="card-footer-row">
-                  <a href="${esc(targetCard.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="source-link">
-                    <span>Wikipedia Reference</span>
-                    <span>↗</span>
-                  </a>
-                </div>`
-              : ''
-          }
-        </div>
-      </article>
+  // Reviewing the previous question
+  if (state.quizViewingLast && lastIdx >= 0) {
+    const lastQ = state.quizQuestions[lastIdx];
+    const { targetCard, selectedOptionId, qType } = lastQ;
+    return `
+      <div class="stage">
+        <div class="quiz-meta"><span>Question ${lastIdx + 1} of ${state.quizQuestions.length}</span><span></span></div>
+        ${renderMediaFrame(targetCard, deck, { cls: 'quiz-frame', alt: targetCard.name, caption: targetCard.name })}
+        <div class="quiz-question">${esc(qQuestions[qType] || 'Which one is this?')}</div>
+        ${renderOptions(lastQ, true, selectedOptionId)}
+        ${renderCardDetails(targetCard)}
+      </div>
     `;
   }
 
@@ -1680,29 +1422,23 @@ function renderQuizMode(deck) {
     const pct = Math.round((state.quizScore / total) * 100);
     const lastQ = lastIdx >= 0 ? state.quizQuestions[lastIdx] : null;
     return `
-      <div class="study-card" style="padding:36px 20px;text-align:center;gap:14px;">
-        <div style="font-size:3.2rem;">${pct >= 80 ? '🏆' : '🎯'}</div>
-        <h2 class="card-title">Quiz Score: ${state.quizScore} / ${total} (${pct}%)</h2>
-        <p style="color:var(--text-sub);font-size:0.9rem;">Best Streak: 🔥 ${state.quizBestStreak}</p>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
-          ${
-            lastQ
-              ? `<button class="btn btn-secondary" data-action="view-last-question">
-                  ← View Last Question (${lastQ.isCorrect ? '✓ Right' : '✕ Wrong'})
-                </button>`
-              : ''
-          }
+      <div class="study-card message finish-panel">
+        <div class="finish-score">${state.quizScore}/${total}</div>
+        <h2 class="card-title" style="font-size:1.3rem;">${pct >= 80 ? 'Great round' : pct >= 50 ? 'Getting there' : 'Keep practising'} · ${pct}%</h2>
+        <p style="color:var(--text-sub);font-size:1rem;">Best streak: ${state.quizBestStreak}</p>
+        <div class="finish-actions">
           ${
             state.quizMissedCards.length > 0
-              ? `<button class="btn btn-warning" data-action="retry-missed">
-                  🎯 Retry ${state.quizMissedCards.length} Missed Card(s)
-                </button>`
+              ? `<button class="btn btn-primary" data-action="retry-missed">Retry ${state.quizMissedCards.length} missed</button>`
               : ''
           }
-          <button class="btn btn-primary" data-action="restart-quiz">🔄 Play Full Quiz Again</button>
-          <button class="btn btn-secondary" data-action="switch-mode" data-mode="recall">
-            🔄 Practice in Recall Mode
-          </button>
+          <button class="btn btn-secondary" data-action="restart-quiz">Play again</button>
+          ${
+            lastQ
+              ? `<button class="btn btn-secondary" data-action="view-last-question">Review last question</button>`
+              : ''
+          }
+          <button class="btn btn-secondary" data-action="switch-mode" data-mode="recall">Practise in Recall</button>
         </div>
       </div>
     `;
@@ -1710,122 +1446,64 @@ function renderQuizMode(deck) {
 
   const currentQ = state.quizQuestions[state.quizIndex];
   if (!currentQ) return '';
-  const { targetCard, options, qType } = currentQ;
-  const imgSrc = getBestCardImageSrc(targetCard, deck.color);
+  const { targetCard, qType } = currentQ;
   const answered = state.quizSelectedOptionId !== null;
-  const promptTitle = qPromptLabels[qType] || 'Identify Subject';
+  const showClues = qType === 'clues-to-name' && !answered;
 
   return `
-    <article class="study-card">
-      <div class="quiz-prompt-banner">
-        <span>${esc(promptTitle)}</span>
-        <span>${state.quizStreak > 0 ? `🔥 ${state.quizStreak} Streak` : `Score: ${state.quizScore}`}</span>
+    <div class="stage">
+      <div class="quiz-meta">
+        <span>${esc(qPromptLabels[qType] || 'Identify')}</span>
+        ${
+          state.quizStreak > 1
+            ? `<span class="streak">${icon('flame', 'xs')} ${state.quizStreak} in a row</span>`
+            : `<span>Score ${state.quizScore}</span>`
+        }
       </div>
-
       ${
-        qType !== 'clues-to-name' || answered
-          ? `<div class="${getMediaFrameClass(targetCard.id, 'quiz-frame')}" style="--media-bg: url(&quot;${esc(imgSrc)}&quot;)">
-              <img
-                src="${esc(imgSrc)}"
-                alt="Quiz question"
-                data-card-id="${esc(targetCard.id)}"
-                class="media-img ${state.imageFitContain ? 'contain' : ''}"
-                data-action="open-lightbox"
-                data-caption="${answered ? esc(targetCard.name) : 'Mystery Subject'}"
-              />
-              <div class="media-overlay-bottom">
-                <button
-                  class="media-ctrl-btn"
-                  data-action="open-lightbox"
-                  data-src="${esc(imgSrc)}"
-                  data-caption="${answered ? esc(targetCard.name) : 'Mystery Subject'}"
-                >
-                  🔍 Zoom
-                </button>
-                <button class="media-ctrl-btn" data-action="toggle-fit">
-                  ${state.imageFitContain ? '⛶ Crop' : '◱ Fit'}
-                </button>
-              </div>
+        showClues
+          ? `<div class="info-block key-marks" style="font-size:1.12rem;line-height:1.5;padding:18px;">
+              <div class="info-block-label">Field clues</div>
+              <div style="color:var(--text-main);">${esc(targetCard.keyFeatures || targetCard.description)}</div>
             </div>`
-          : `<div class="card-body" style="padding-bottom:2px;">
-              <div class="info-block key-marks">
-                <div class="info-block-label">🔎 Field Clues</div>
-                <div style="color:var(--text-main);font-size:0.95rem;">
-                  ${esc(targetCard.keyFeatures || targetCard.description)}
-                </div>
-              </div>
-            </div>`
+          : renderMediaFrame(targetCard, deck, {
+              cls: 'quiz-frame',
+              alt: answered ? targetCard.name : 'Quiz question',
+              caption: answered ? targetCard.name : 'Mystery subject'
+            })
       }
-
-      <div class="quiz-options">
-        ${options
-          .map((opt, idx) => {
-            let cls = 'quiz-opt';
-            let keyBadge = optionLetters[idx] || String(idx + 1);
-            if (answered) {
-              if (opt.id === targetCard.id) {
-                cls += ' correct';
-                keyBadge = '✓';
-              } else if (opt.id === state.quizSelectedOptionId) {
-                cls += ' wrong';
-                keyBadge = '✕';
-              }
-            }
-            const mainText = qType === 'photo-to-sub' && opt.subtitle ? opt.subtitle : opt.name;
-            const subText = qType === 'photo-to-sub' ? (answered ? opt.name : '') : opt.subtitle || '';
-
-            return `
-              <button
-                class="${cls}"
-                data-action="quiz-answer"
-                data-option="${esc(opt.id)}"
-                ${answered ? 'disabled' : ''}
-              >
-                <span class="quiz-opt-key">${keyBadge}</span>
-                <div class="quiz-opt-content">
-                  <span class="quiz-opt-title">${esc(mainText)}</span>
-                  ${subText ? `<span class="quiz-opt-sub">${esc(subText)}</span>` : ''}
-                </div>
-              </button>
-            `;
-          })
-          .join('')}
-      </div>
-    </article>
+      <div class="quiz-question">${esc(qQuestions[qType] || 'Which one is this?')}</div>
+      ${renderOptions(currentQ, answered, state.quizSelectedOptionId)}
+    </div>
   `;
 }
 
-// --- STICKY BOTTOM THUMB DOCK (SINGLE FOCUSED ACTION AREA) ---
+// --- BOTTOM DOCK (ONLY WHEN THERE IS AN ACTION TO TAKE) ---
 function renderStudyDock() {
   const deck = getActiveDeck();
   if (!deck) return '';
 
-  // 1. READ / BROWSE DOCK
   if (state.studyMode === 'browse') {
     const cards = getFilteredBrowseCards();
     if (!cards.length) return '';
     return `
       <footer class="study-dock">
         <div class="dock-row">
-          <button class="dock-nav-btn" data-action="browse-prev">← Prev</button>
+          <button class="dock-nav-btn" data-action="browse-prev">${icon('prev')} Prev</button>
           <span class="dock-counter-pill">${state.browseIndex + 1} / ${cards.length}</span>
-          <button class="dock-nav-btn primary" data-action="browse-next">Next →</button>
+          <button class="dock-nav-btn primary" data-action="browse-next">Next ${icon('next')}</button>
         </div>
       </footer>
     `;
   }
 
-  // 2. RECALL DOCK (2-STAGE: REVEAL FIRST -> THEN GRADE)
   if (state.studyMode === 'recall') {
     if (state.recallFinished || !state.recallQueue.length) return '';
     if (!state.recallFlipped) {
       return `
         <footer class="study-dock">
           <div class="dock-row">
-            <button class="dock-nav-btn primary" data-action="flip-card" style="height:50px;font-size:0.95rem;">
-              <span>Reveal Answer</span>
-              <span>↻</span>
-            </button>
+            <button class="dock-nav-btn primary" data-action="flip-card">Reveal answer</button>
           </div>
         </footer>
       `;
@@ -1834,19 +1512,18 @@ function renderStudyDock() {
       <footer class="study-dock">
         <div class="dock-grade-grid">
           <button class="grade-btn learning" data-action="grade-recall" data-grade="learning">
-            <span class="grade-btn-main">Still Learning</span>
-            <span class="grade-btn-sub">Review again</span>
+            <span class="grade-btn-main">Still learning</span>
+            <span class="grade-btn-sub">Swipe left</span>
           </button>
           <button class="grade-btn mastered" data-action="grade-recall" data-grade="mastered">
-            <span class="grade-btn-main">Got It ✓</span>
-            <span class="grade-btn-sub">Mark mastered</span>
+            <span class="grade-btn-main">Got it</span>
+            <span class="grade-btn-sub">Swipe right</span>
           </button>
         </div>
       </footer>
     `;
   }
 
-  // 3. QUIZ DOCK (AUTO-ADVANCE + VIEW LAST QUESTION)
   if (state.studyMode === 'quiz') {
     if (!state.quizQuestions.length) return '';
     const lastIdx = getLastAnsweredQuizIndex();
@@ -1856,17 +1533,13 @@ function renderStudyDock() {
       return `
         <footer class="study-dock">
           <div class="quiz-feedback-box">
-            <div class="quiz-feedback-header">
+            <div class="quiz-feedback-header ${lastQ.isCorrect ? 'correct' : 'wrong'}">
               <span class="quiz-feedback-title ${lastQ.isCorrect ? 'correct' : 'wrong'}">
-                ${
-                  lastQ.isCorrect
-                    ? `✓ Question ${lastIdx + 1}: Correct (${esc(lastQ.targetCard.name)})`
-                    : `✕ Question ${lastIdx + 1}: Wrong — Answer: ${esc(lastQ.targetCard.name)}`
-                }
+                ${lastQ.isCorrect ? 'You got this one right' : `Answer: ${esc(lastQ.targetCard.name)}`}
               </span>
             </div>
-            <button class="dock-nav-btn primary" data-action="close-last-question" style="height:46px;">
-              ${state.quizFinished ? 'Back to Final Score →' : `Resume Question ${state.quizIndex + 1} →`}
+            <button class="dock-nav-btn primary" data-action="close-last-question">
+              ${state.quizFinished ? 'Back to score' : `Resume question ${state.quizIndex + 1}`}
             </button>
           </div>
         </footer>
@@ -1877,46 +1550,27 @@ function renderStudyDock() {
 
     const currentQ = state.quizQuestions[state.quizIndex];
     if (!currentQ) return '';
-    const answered = state.quizSelectedOptionId !== null;
 
-    if (!answered) {
-      if (lastIdx >= 0) {
-        const lastQ = state.quizQuestions[lastIdx];
-        return `
-          <footer class="study-dock">
-            <div class="dock-row">
-              <button class="dock-nav-btn" data-action="view-last-question" style="height:44px;font-size:0.84rem;">
-                <span>← View Last Question</span>
-                <span style="color:${lastQ.isCorrect ? '#34d399' : '#f87171'};font-weight:800;margin-left:4px;">
-                  (${lastQ.isCorrect ? '✓ Right' : '✕ Wrong'})
-                </span>
-              </button>
-            </div>
-          </footer>
-        `;
-      }
-
+    if (state.quizSelectedOptionId === null) {
+      if (lastIdx < 0) return '';
       return `
         <footer class="study-dock">
-          <div style="text-align:center;font-size:0.78rem;color:var(--text-muted);padding:4px 0;">
-            Tap an option above (or press A–D) — advances automatically
-          </div>
+          <button class="dock-nav-btn ghost" data-action="view-last-question">
+            ${icon('prev', 'sm')} Previous question
+          </button>
         </footer>
       `;
     }
 
     const isCorrect = state.quizSelectedOptionId === currentQ.targetCard.id;
-
     return `
       <footer class="study-dock">
         <div class="quiz-feedback-box">
-          <div class="quiz-feedback-header">
+          <div class="quiz-feedback-header ${isCorrect ? 'correct' : 'wrong'}">
             <span class="quiz-feedback-title ${isCorrect ? 'correct' : 'wrong'}">
-              ${isCorrect ? '✓ Spot on!' : `✕ Answer: ${esc(currentQ.targetCard.name)}`}
+              ${isCorrect ? 'Correct' : `Answer: ${esc(currentQ.targetCard.name)}`}
             </span>
-            <span style="font-size:0.75rem;color:var(--text-muted);font-weight:600;">
-              Moving to next…
-            </span>
+            <button class="hint-pill-btn" data-action="quiz-next">Next ${icon('next', 'xs')}</button>
           </div>
         </div>
       </footer>
@@ -1938,23 +1592,28 @@ function renderBottomSheet() {
           <div class="sheet-handle"></div>
           <div class="sheet-header">
             <span class="sheet-title">FieldGuide Menu</span>
-            <button class="sheet-close-btn" data-action="close-sheet">✕</button>
+            <button class="sheet-close-btn" data-action="close-sheet" aria-label="Close">${icon('close', 'sm')}</button>
+          </div>
+
+          <div class="sheet-section">
+            <div class="sheet-section-label">Appearance</div>
+            ${renderThemeSwitch()}
           </div>
 
           <div class="sheet-section">
             <div class="sheet-section-label">Create &amp; Organize</div>
             <div class="sheet-menu-list">
               <button class="sheet-item" data-action="open-add-deck" data-tab="paste">
-                <span>📝 Paste Text or Upload Deck File</span>
-                <span>›</span>
+                <span class="sheet-item-label">${icon('doc', 'sm')} Paste text or upload a deck file</span>
+                <span>${icon('next', 'sm')}</span>
               </button>
               <button class="sheet-item" data-action="open-add-deck" data-tab="prompt">
-                <span>🤖 AI Deck Prompt Generator</span>
-                <span>›</span>
+                <span class="sheet-item-label">${icon('sparkle', 'sm')} AI deck prompt generator</span>
+                <span>${icon('next', 'sm')}</span>
               </button>
               <button class="sheet-item" data-action="open-sheet" data-sheet="manage-folders">
-                <span>📁 Manage Folders (${folderStats.length})</span>
-                <span>›</span>
+                <span class="sheet-item-label">${icon('folder', 'sm')} Manage folders (${folderStats.length})</span>
+                <span>${icon('next', 'sm')}</span>
               </button>
             </div>
           </div>
@@ -1977,7 +1636,7 @@ function renderBottomSheet() {
                 : `
                   <div class="sheet-menu-list">
                     <button class="sheet-item" data-action="ask-confirm" data-confirm="restore-starters">
-                      <span>↻ Restore Built-in Starter Decks</span>
+                      <span class="sheet-item-label">${icon('reset', 'sm')} Restore built-in starter decks</span>
                       <span></span>
                     </button>
                   </div>
@@ -1996,8 +1655,8 @@ function renderBottomSheet() {
         <div class="bottom-sheet" onclick="event.stopPropagation()">
           <div class="sheet-handle"></div>
           <div class="sheet-header">
-            <span class="sheet-title">📁 Organize Folders</span>
-            <button class="sheet-close-btn" data-action="close-sheet">✕</button>
+            <span class="sheet-title">Organize folders</span>
+            <button class="sheet-close-btn" data-action="close-sheet" aria-label="Close">${icon('close', 'sm')}</button>
           </div>
 
           <div class="sheet-section">
@@ -2023,8 +1682,8 @@ function renderBottomSheet() {
                 .map((f) => {
                   if (state.renamingFolder === f.name) {
                     return `
-                      <div class="inline-confirm-box" style="background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.35);">
-                        <div style="font-size:0.76rem;font-weight:700;color:#c7d2fe;">Rename "${esc(f.name)}"</div>
+                      <div class="inline-confirm-box" style="background:var(--accent-soft);">
+                        <div style="font-size:0.76rem;font-weight:700;color:var(--accent-text);">Rename "${esc(f.name)}"</div>
                         <div style="display:flex;gap:8px;">
                           <input
                             type="text"
@@ -2035,8 +1694,8 @@ function renderBottomSheet() {
                           <button class="btn btn-primary" data-action="save-rename-folder" data-old="${esc(f.name)}" style="padding:8px 12px;">
                             Save
                           </button>
-                          <button class="btn btn-secondary" data-action="cancel-rename-folder" style="padding:8px 12px;">
-                            ✕
+                          <button class="btn btn-secondary" data-action="cancel-rename-folder" style="padding:8px 12px;" aria-label="Cancel">
+                            ${icon('close', 'sm')}
                           </button>
                         </div>
                       </div>
@@ -2050,7 +1709,7 @@ function renderBottomSheet() {
                         data-action="select-folder-and-close"
                         data-folder="${esc(f.name)}"
                       >
-                        <span>📁</span>
+                        ${icon('folder', 'sm')}
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</span>
                         <span style="font-size:0.75rem;color:var(--text-muted);">(${f.count} ${f.count === 1 ? 'set' : 'sets'})</span>
                       </div>
@@ -2061,16 +1720,17 @@ function renderBottomSheet() {
                           data-folder="${esc(f.name)}"
                           title="Rename folder"
                         >
-                          ✏️ Rename
+                          ${icon('pencil', 'xs')} Rename
                         </button>
                         <button
                           class="hint-pill-btn"
-                          style="color:#f87171;border-color:rgba(239,68,68,0.28);"
+                          style="color:var(--danger-text);"
                           data-action="delete-folder"
                           data-folder="${esc(f.name)}"
                           title="Remove folder"
+                          aria-label="Remove folder"
                         >
-                          ✕
+                          ${icon('trash', 'xs')}
                         </button>
                       </div>
                     </div>
@@ -2098,7 +1758,7 @@ function renderBottomSheet() {
           <div class="sheet-handle"></div>
           <div class="sheet-header">
             <span class="sheet-title">Add Custom Deck</span>
-            <button class="sheet-close-btn" data-action="close-sheet">✕</button>
+            <button class="sheet-close-btn" data-action="close-sheet" aria-label="Close">${icon('close', 'sm')}</button>
           </div>
 
           <div class="mode-segmented" role="tablist">
@@ -2107,14 +1767,14 @@ function renderBottomSheet() {
               data-action="switch-add-tab"
               data-tab="paste"
             >
-              📝 1. Paste / Upload
+              ${icon('doc', 'sm')}<span>Paste deck</span>
             </button>
             <button
               class="mode-seg-btn ${state.addDeckTab === 'prompt' ? 'active' : ''}"
               data-action="switch-add-tab"
               data-tab="prompt"
             >
-              🤖 2. Get AI Prompt
+              ${icon('sparkle', 'sm')}<span>AI prompt</span>
             </button>
           </div>
 
@@ -2122,7 +1782,7 @@ function renderBottomSheet() {
             state.addDeckTab === 'paste'
               ? `
                 <div class="sheet-section">
-                  <div class="sheet-section-label">📁 Save to Folder (Optional)</div>
+                  <div class="sheet-section-label">Save to folder (optional)</div>
                   <input
                     type="text"
                     id="import-folder-input"
@@ -2142,7 +1802,7 @@ function renderBottomSheet() {
                                   data-action="pick-import-folder"
                                   data-folder="${esc(f.name)}"
                                 >
-                                  <span>📁 ${esc(f.name)}</span>
+                                  <span>${esc(f.name)}</span>
                                 </button>
                               `
                             )
@@ -2155,7 +1815,7 @@ function renderBottomSheet() {
                 <div class="sheet-section">
                   <div style="display:flex;align-items:center;justify-content:space-between;">
                     <span class="sheet-section-label">Paste AI Reply or JSON</span>
-                    <button class="hint-pill-btn" data-action="paste-clipboard">📋 Paste Clipboard</button>
+                    <button class="hint-pill-btn" data-action="paste-clipboard">${icon('clipboard', 'xs')} Paste clipboard</button>
                   </div>
                   <textarea
                     id="json-paste-area"
@@ -2172,10 +1832,10 @@ function renderBottomSheet() {
 
                 <div class="dock-row" style="margin-top:2px;">
                   <button class="btn btn-secondary" data-action="switch-add-tab" data-tab="prompt" style="flex:1;">
-                    🤖 Need Prompt?
+                    Get AI prompt
                   </button>
                   <button class="btn btn-primary" data-action="submit-import-json" style="flex:1.3;">
-                    Create Deck ✓
+                    Create deck
                   </button>
                 </div>
               `
@@ -2198,7 +1858,7 @@ function renderBottomSheet() {
                       value="${esc(state.importTopicInput)}"
                     />
                     <button class="btn btn-primary" data-action="copy-ai-prompt" style="white-space:nowrap;">
-                      📋 Copy
+                      ${icon('clipboard', 'sm')} Copy
                     </button>
                   </div>
                 </div>
@@ -2209,13 +1869,13 @@ function renderBottomSheet() {
                     id="prompt-preview-box"
                     class="form-textarea"
                     readonly
-                    style="min-height:140px;color:#cbd5e1;"
+                    style="min-height:140px;color:var(--text-sub);"
                   >${esc(promptPreview)}</textarea>
                 </div>
 
                 <div class="dock-row">
                   <button class="btn btn-primary" data-action="switch-add-tab" data-tab="paste" style="width:100%;">
-                    Go to Paste Box →
+                    Go to paste box ${icon('next', 'sm')}
                   </button>
                 </div>
               `
@@ -2232,7 +1892,7 @@ function renderBottomSheet() {
     return renderDeckManagementSheetContent(deck, false);
   }
 
-  // 5. FOCUSED STUDY OPTIONS SHEET (FROM STUDY HEADER `⚙️` BUTTON)
+  // 5. FOCUSED STUDY OPTIONS SHEET (FROM STUDY HEADER OPTIONS BUTTON)
   if (state.activeSheet === 'study-options') {
     const deck = getActiveDeck();
     if (!deck) return '';
@@ -2255,32 +1915,47 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
         <div class="sheet-handle"></div>
         <div class="sheet-header">
           <span class="sheet-title">${esc(deck.icon || '🃏')} ${esc(deck.title)}</span>
-          <button class="sheet-close-btn" data-action="close-sheet">✕</button>
+          <button class="sheet-close-btn" data-action="close-sheet" aria-label="Close">${icon('close', 'sm')}</button>
         </div>
 
         ${
           includeModeSettings
-            ? renderModeSpecificSettingsSection(counts)
-            : `
-              <div class="sheet-section">
-                <div class="sheet-section-label">Launch Study Mode</div>
-                <div class="deck-quick-modes" style="border-top:none;padding-top:0;">
-                  <button class="deck-mode-btn" data-action="open-deck" data-deck="${esc(deck.id)}" data-mode="browse">
-                    📖 Read
-                  </button>
-                  <button class="deck-mode-btn" data-action="open-deck" data-deck="${esc(deck.id)}" data-mode="recall">
-                    🔄 Recall
-                  </button>
-                  <button class="deck-mode-btn" data-action="open-deck" data-deck="${esc(deck.id)}" data-mode="quiz">
-                    🎯 Quiz
-                  </button>
+            ? `<div class="sheet-section">
+                <div class="sheet-section-label">Study mode</div>
+                <div class="mode-segmented" role="tablist">
+                  ${[
+                    ['browse', 'Read'],
+                    ['recall', 'Recall'],
+                    ['quiz', 'Quiz']
+                  ]
+                    .map(
+                      ([m, l]) => `<button class="mode-seg-btn ${state.studyMode === m ? 'active' : ''}" data-action="switch-mode" data-mode="${m}">${l}</button>`
+                    )
+                    .join('')}
                 </div>
+              </div>
+              ${renderModeSpecificSettingsSection(counts)}`
+            : `
+              <div class="mode-launch">
+                ${[
+                  ['browse', 'read', 'Read', 'Browse the photos and field notes'],
+                  ['recall', 'recall', 'Recall', 'Reveal each card, then swipe to grade'],
+                  ['quiz', 'quiz', 'Quiz', 'Multiple choice from photos and clues']
+                ]
+                  .map(
+                    ([mode, ic, label, sub]) => `
+                      <button class="mode-launch-btn" data-action="open-deck" data-deck="${esc(deck.id)}" data-mode="${mode}">
+                        <span class="mode-launch-icon">${icon(ic)}</span>
+                        <span class="mode-launch-text"><b>${label}</b><span>${sub}</span></span>
+                      </button>`
+                  )
+                  .join('')}
               </div>
             `
         }
 
         <div class="sheet-section">
-          <div class="sheet-section-label">📁 Folder / Category</div>
+          <div class="sheet-section-label">Folder</div>
           <div class="sheet-pill-grid">
             ${folderStats
               .map(
@@ -2291,8 +1966,8 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
                     data-deck="${esc(deck.id)}"
                     data-folder="${esc(f.name)}"
                   >
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📁 ${esc(f.name)}</span>
-                    <span>${currentFolder === f.name ? '✓' : ''}</span>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</span>
+                    <span>${currentFolder === f.name ? icon('check', 'sm') : ''}</span>
                   </button>
                 `
               )
@@ -2325,17 +2000,17 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
               <span>
                 ${
                   isDownloading
-                    ? `⏳ Saving Offline (${esc(state.downloadProgressText)})...`
-                    : `📥 Save Photos Offline (${cachedCount}/${deck.cards.length} cached)`
+                    ? `Saving offline (${esc(state.downloadProgressText)})…`
+                    : `${icon('download', 'sm')} Save photos offline (${cachedCount}/${deck.cards.length})`
                 }
               </span>
-              <span style="color:var(--accent-hover);font-size:0.78rem;">
-                ${cachedCount >= deck.cards.length && deck.cards.length > 0 ? '✓ Saved' : 'Download'}
+              <span style="color:var(--accent-text);font-size:0.85rem;">
+                ${cachedCount >= deck.cards.length && deck.cards.length > 0 ? 'Saved' : 'Download'}
               </span>
             </button>
 
             <button class="sheet-item" data-action="export-deck" data-deck="${esc(deck.id)}">
-              <span>⬇ Export Deck (.json)</span>
+              <span class="sheet-item-label">${icon('download', 'sm')} Export deck (.json)</span>
               <span></span>
             </button>
 
@@ -2354,7 +2029,7 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
                 `
                 : `
                   <button class="sheet-item" data-action="ask-confirm" data-confirm="reset-progress">
-                    <span>↺ Reset Mastery Progress</span>
+                    <span class="sheet-item-label">${icon('reset', 'sm')} Reset mastery progress</span>
                     <span></span>
                   </button>
                 `
@@ -2364,7 +2039,7 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
               state.confirmAction === 'delete-deck'
                 ? `
                   <div class="inline-confirm-box">
-                    <div style="font-size:0.84rem;font-weight:650;color:#fca5a5;">
+                    <div style="font-size:0.84rem;font-weight:650;color:var(--danger-text);">
                       Permanently delete "${esc(deck.title)}"?
                     </div>
                     <div class="dock-row">
@@ -2375,7 +2050,7 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
                 `
                 : `
                   <button class="sheet-item danger" data-action="ask-confirm" data-confirm="delete-deck">
-                    <span>🗑 Delete Deck</span>
+                    <span class="sheet-item-label">${icon('trash', 'sm')} Delete deck</span>
                     <span></span>
                   </button>
                 `
@@ -2391,6 +2066,25 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
   `;
 }
 
+function renderThemeSwitch() {
+  return `
+    <div class="mode-segmented" role="group" aria-label="Appearance">
+      ${[
+        ['system', 'auto', 'Auto'],
+        ['light', 'sun', 'Light'],
+        ['dark', 'moon', 'Dark']
+      ]
+        .map(
+          ([val, ic, label]) => `
+            <button class="mode-seg-btn ${state.theme === val ? 'active' : ''}" data-action="set-theme" data-theme-value="${val}" aria-pressed="${state.theme === val}">
+              ${icon(ic, 'sm')}<span>${label}</span>
+            </button>`
+        )
+        .join('')}
+    </div>
+  `;
+}
+
 function renderModeSpecificSettingsSection(counts) {
   const photoDisplaySection = `
     <div class="sheet-section">
@@ -2401,16 +2095,16 @@ function renderModeSpecificSettingsSection(counts) {
           data-action="set-image-fit"
           data-contain="true"
         >
-          <span>◱ Fit Full Photo</span>
-          <span>${state.imageFitContain ? '✓' : ''}</span>
+          <span class="sheet-item-label">${icon('fit', 'sm')} Fit full photo</span>
+          <span>${state.imageFitContain ? icon('check', 'sm') : ''}</span>
         </button>
         <button
           class="sheet-pill-opt ${!state.imageFitContain ? 'active' : ''}"
           data-action="set-image-fit"
           data-contain="false"
         >
-          <span>⛶ Crop to Fill</span>
-          <span>${!state.imageFitContain ? '✓' : ''}</span>
+          <span class="sheet-item-label">${icon('crop', 'sm')} Crop to fill</span>
+          <span>${!state.imageFitContain ? icon('check', 'sm') : ''}</span>
         </button>
       </div>
     </div>
@@ -2436,7 +2130,7 @@ function renderModeSpecificSettingsSection(counts) {
                   data-keep-sheet="true"
                 >
                   <span>${lbl}</span>
-                  <span>${state.browseFilter === val ? '✓' : ''}</span>
+                  <span>${state.browseFilter === val ? icon('check', 'sm') : ''}</span>
                 </button>
               `
             )
@@ -2458,8 +2152,8 @@ function renderModeSpecificSettingsSection(counts) {
             data-prompt="image-first"
             data-keep-sheet="true"
           >
-            <span>🖼️ Photo First</span>
-            <span>${state.recallPromptType === 'image-first' ? '✓' : ''}</span>
+            <span class="sheet-item-label">${icon('image', 'sm')} Photo first</span>
+            <span>${state.recallPromptType === 'image-first' ? icon('check', 'sm') : ''}</span>
           </button>
           <button
             class="sheet-pill-opt ${state.recallPromptType === 'name-first' ? 'active' : ''}"
@@ -2467,8 +2161,8 @@ function renderModeSpecificSettingsSection(counts) {
             data-prompt="name-first"
             data-keep-sheet="true"
           >
-            <span>🔤 Name First</span>
-            <span>${state.recallPromptType === 'name-first' ? '✓' : ''}</span>
+            <span class="sheet-item-label">${icon('type', 'sm')} Name first</span>
+            <span>${state.recallPromptType === 'name-first' ? icon('check', 'sm') : ''}</span>
           </button>
         </div>
       </div>
@@ -2482,7 +2176,7 @@ function renderModeSpecificSettingsSection(counts) {
             data-filter="all"
           >
             <span>All (${counts.all})</span>
-            <span>${state.recallFilter === 'all' ? '✓' : ''}</span>
+            <span>${state.recallFilter === 'all' ? icon('check', 'sm') : ''}</span>
           </button>
           <button
             class="sheet-pill-opt ${state.recallFilter === 'unmastered' ? 'active' : ''}"
@@ -2490,7 +2184,7 @@ function renderModeSpecificSettingsSection(counts) {
             data-filter="unmastered"
           >
             <span>Unmastered (${counts.all - counts.mastered})</span>
-            <span>${state.recallFilter === 'unmastered' ? '✓' : ''}</span>
+            <span>${state.recallFilter === 'unmastered' ? icon('check', 'sm') : ''}</span>
           </button>
         </div>
       </div>
@@ -2503,20 +2197,20 @@ function renderModeSpecificSettingsSection(counts) {
       <div class="sheet-section-label">Quiz Question Style</div>
       <div class="sheet-menu-list">
         ${[
-          ['mixed', '🎲 Mixed Questions (Recommended)'],
-          ['photo-to-name', '🖼️ Photo → Common Name'],
-          ['photo-to-sub', '🔬 Photo → Scientific / Model Name'],
-          ['clues-to-name', '🔎 Field Clues → Common Name']
+          ['mixed', 'dice', 'Mixed questions (recommended)'],
+          ['photo-to-name', 'image', 'Photo to common name'],
+          ['photo-to-sub', 'tag', 'Photo to scientific / model name'],
+          ['clues-to-name', 'search', 'Field clues to common name']
         ]
           .map(
-            ([val, label]) => `
+            ([val, ic, label]) => `
               <button
                 class="sheet-item ${state.quizQuestionType === val ? 'active' : ''}"
                 data-action="set-quiz-type"
                 data-qtype="${val}"
               >
-                <span>${label}</span>
-                <span>${state.quizQuestionType === val ? '✓' : ''}</span>
+                <span class="sheet-item-label">${icon(ic, 'sm')} ${label}</span>
+                <span>${state.quizQuestionType === val ? icon('check', 'sm') : ''}</span>
               </button>
             `
           )
@@ -2532,8 +2226,8 @@ function renderLightbox() {
     <div class="sheet-backdrop" data-action="close-lightbox" style="align-items:center;padding:16px;flex-direction:column;gap:14px;">
       <img src="${esc(state.lightboxUrl)}" alt="${esc(state.lightboxCaption)}" class="lightbox-img" />
       <div style="display:flex;align-items:center;gap:12px;">
-        <span style="font-weight:700;font-size:0.95rem;">${esc(state.lightboxCaption)}</span>
-        <button class="hint-pill-btn" data-action="close-lightbox">Close ✕</button>
+        <span class="lightbox-text" style="font-weight:700;font-size:1rem;">${esc(state.lightboxCaption)}</span>
+        <button class="hint-pill-btn" data-action="close-lightbox" style="background:#fff;color:#0f1b2d;">Close</button>
       </div>
     </div>
   `;
@@ -2554,6 +2248,103 @@ function applyImageAspectAdaptation(imgEl) {
       frameEl.style.setProperty('--media-bg', `url("${imgEl.src.replace(/"/g, '\\"')}")`);
     }
   }
+}
+
+// --- RECALL: DRAG THE REVEALED CARD RIGHT (GOT IT) OR LEFT (STILL LEARNING) ---
+function attachRecallSwipe() {
+  const card = document.getElementById('recall-answer');
+  const shell = document.getElementById('recall-swipe');
+  if (!card || !shell || state.studyMode !== 'recall') return;
+  const stampAgain = document.getElementById('stamp-again');
+  const stampGot = document.getElementById('stamp-got');
+  const THRESHOLD = 90;
+  let startX = 0;
+  let startY = 0;
+  let dx = 0;
+  let dragging = false;
+  let locked = false;
+
+  const paint = () => {
+    card.style.transform = `translateX(${dx}px) rotate(${dx / 22}deg)`;
+    const strength = Math.min(Math.abs(dx) / THRESHOLD, 1);
+    stampGot.style.opacity = dx > 0 ? strength : 0;
+    stampAgain.style.opacity = dx < 0 ? strength : 0;
+  };
+
+  shell.ontouchstart = (e) => {
+    const t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    dx = 0;
+    dragging = true;
+    locked = false;
+    card.classList.remove('settling');
+  };
+
+  shell.ontouchmove = (e) => {
+    if (!dragging) return;
+    const t = e.touches[0];
+    const mx = t.clientX - startX;
+    const my = t.clientY - startY;
+    if (!locked) {
+      if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+      if (Math.abs(my) > Math.abs(mx)) {
+        dragging = false;
+        return;
+      }
+      locked = true;
+    }
+    dx = mx;
+    paint();
+  };
+
+  const finish = () => {
+    if (!dragging || !locked) {
+      dragging = false;
+      return;
+    }
+    dragging = false;
+    if (Math.abs(dx) >= THRESHOLD) {
+      const dir = dx > 0 ? 1 : -1;
+      card.classList.add('flying');
+      card.style.transform = `translateX(${dir * 420}px) rotate(${dir * 18}deg)`;
+      setTimeout(() => gradeRecallCard(dir > 0 ? 'mastered' : 'learning'), 200);
+    } else {
+      card.classList.add('settling');
+      dx = 0;
+      paint();
+    }
+  };
+  shell.ontouchend = finish;
+  shell.ontouchcancel = finish;
+}
+
+// --- BOTTOM SHEETS: DRAG THE HANDLE DOWN TO DISMISS ---
+function attachSheetDrag() {
+  const sheet = appRoot.querySelector('.bottom-sheet');
+  const grab = sheet?.querySelector('.sheet-handle');
+  if (!sheet || !grab) return;
+  let startY = 0;
+  let dy = 0;
+  grab.ontouchstart = (e) => {
+    startY = e.touches[0].clientY;
+    dy = 0;
+    sheet.style.animation = 'none';
+  };
+  grab.ontouchmove = (e) => {
+    dy = Math.max(0, e.touches[0].clientY - startY);
+    sheet.style.transform = `translateY(${dy}px)`;
+  };
+  grab.ontouchend = () => {
+    if (dy > 90) {
+      state.activeSheet = null;
+      state.confirmAction = null;
+      render();
+    } else {
+      sheet.style.transition = 'transform 0.2s ease';
+      sheet.style.transform = '';
+    }
+  };
 }
 
 function attachEvents() {
@@ -2652,12 +2443,31 @@ function attachEvents() {
     };
   }
 
+  attachRecallSwipe();
+  attachSheetDrag();
+
   appRoot.querySelectorAll('[data-action]').forEach((el) => {
     const action = el.dataset.action;
     el.onclick = async (e) => {
       e.stopPropagation();
 
       switch (action) {
+        case 'set-theme':
+          setTheme(el.dataset.themeValue || 'system');
+          break;
+
+        case 'practice-now':
+          state.recallFilter = 'unmastered';
+          openDeck(el.dataset.deck, 'recall');
+          break;
+
+        case 'toggle-home-search':
+          state.homeSearchOpen = !state.homeSearchOpen;
+          if (!state.homeSearchOpen) state.homeSearchQuery = '';
+          render();
+          if (state.homeSearchOpen) document.getElementById('home-search-input')?.focus();
+          break;
+
         case 'go-home':
           clearQuizAdvanceTimer();
           state.view = 'home';
@@ -2708,6 +2518,7 @@ function attachEvents() {
 
         case 'clear-home-search':
           state.homeSearchQuery = '';
+          state.homeSearchOpen = false;
           render();
           break;
 

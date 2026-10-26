@@ -9,6 +9,12 @@ A sleek, mobile-first Progressive Web App (PWA) for Android and desktop designed
 
 Plus a sample custom import deck in [`data/sample-deck-butterflies.json`](./data/sample-deck-butterflies.json).
 
+## Look and feel
+- Mobile-first, one-handed layout: 44px minimum touch targets, 56–64px primary buttons.
+- **Today** home screen with a practice button, daily streak and a 2-column deck grid.
+- **Light, dark or automatic** appearance (home menu → Appearance). Remembered between visits.
+- Gestures: swipe left/right to move through cards in Read, swipe the revealed card right (*Got it*) or left (*Still learning*) in Recall, drag a sheet's handle down to close it.
+
 ## 3 Practice Modes
 - **📖 Browse Mode (Field Guide)**: Casual reading through cards with zoomable high-res photos, Fit/Fill toggle, common & scientific names, key identification features, full descriptions, and direct links to Wikipedia/sources.
 - **🔄 Recall Mode (3D Flip Flashcards)**: Practice active recall with smooth 3D card flips. Switch between **Photo First** or **Name First**, filter to **Needs Practice Only**, and grade yourself (*Still Learning* vs *Got It!*).

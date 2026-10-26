@@ -1,0 +1,322 @@
+<title>FieldGuide UI Directions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,500;1,400&family=Instrument+Sans:wght@400;500;600;700&family=Bricolage+Grotesque:wght@600;800&display=swap">
+<style>
+/* Layout: review notes up top, then two directions each shown as three phone screens that wrap on narrow widths. */
+:root {
+  --bg: #f4f5f2; --surface: #ffffff; --ink: #18201b; --muted: #66726a; --line: #dde2dc; --accent: #2f6f4e; --accent-ink: #ffffff; --bad: #b8402f;
+  /* Direction A: Quiet Gallery */
+  --a-bg: #f6f7f4; --a-surface: #ffffff; --a-ink: #16201a; --a-muted: #66736b; --a-line: #e1e6e0; --a-accent: #2f6f4e; --a-on: #ffffff; --a-soft: #e3efe8; --a-good: #2f8f5b; --a-bad: #c4473a;
+  --a-photo1: #7fa88f; --a-photo2: #2d4a3a;
+  /* Direction B: Daily Trainer */
+  --b-bg: #eef1f6; --b-surface: #ffffff; --b-ink: #0f1b2d; --b-muted: #5f6c82; --b-line: #dbe1ec; --b-accent: #2457f5; --b-on: #ffffff; --b-soft: #e1e8ff; --b-sun: #ffc83d; --b-good: #14915a; --b-bad: #d6453a;
+  --b-t1: #ffd9a8; --b-t2: #bfe6d0; --b-t3: #c9d6ff; --b-tile-ink: #16202e;
+  --display: 'Newsreader', Georgia, serif;
+  --sans: 'Instrument Sans', system-ui, sans-serif;
+  --chunk: 'Bricolage Grotesque', 'Instrument Sans', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b100d; --surface: #141c17; --ink: #e9efea; --muted: #93a398; --line: #26332b; --accent: #6cc799; --accent-ink: #07130c; --bad: #ef8a7b;
+  --a-bg: #0e1411; --a-surface: #172019; --a-ink: #e8efe9; --a-muted: #8fa196; --a-line: #25322a; --a-accent: #6cc799; --a-on: #07130c; --a-soft: #1f3328; --a-good: #6cc799; --a-bad: #ef8a7b;
+  --a-photo1: #4d7a61; --a-photo2: #12221a;
+  --b-bg: #0b1220; --b-surface: #152036; --b-ink: #eef2fb; --b-muted: #94a3bf; --b-line: #263250; --b-accent: #6c8dff; --b-on: #0b1220; --b-soft: #22305a; --b-sun: #ffc83d; --b-good: #4fd49b; --b-bad: #ff8277;
+  --b-t1: #5a4020; --b-t2: #1f4a37; --b-t3: #2a3a78; --b-tile-ink: #eef2fb;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0b100d; --surface: #141c17; --ink: #e9efea; --muted: #93a398; --line: #26332b; --accent: #6cc799; --accent-ink: #07130c; --bad: #ef8a7b;
+  --a-bg: #0e1411; --a-surface: #172019; --a-ink: #e8efe9; --a-muted: #8fa196; --a-line: #25322a; --a-accent: #6cc799; --a-on: #07130c; --a-soft: #1f3328; --a-good: #6cc799; --a-bad: #ef8a7b;
+  --a-photo1: #4d7a61; --a-photo2: #12221a;
+  --b-bg: #0b1220; --b-surface: #152036; --b-ink: #eef2fb; --b-muted: #94a3bf; --b-line: #263250; --b-accent: #6c8dff; --b-on: #0b1220; --b-soft: #22305a; --b-sun: #ffc83d; --b-good: #4fd49b; --b-bad: #ff8277;
+  --b-t1: #5a4020; --b-t2: #1f4a37; --b-t3: #2a3a78; --b-tile-ink: #eef2fb;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 56px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+h1 { font-family: var(--display); font-weight: 500; font-size: clamp(2rem, 6vw, 3rem); line-height: 1.05; letter-spacing: -0.01em; }
+h2 { font-size: 1.35rem; font-weight: 650; }
+h3 { font-size: 0.78rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+p { margin: 0; max-width: 65ch; }
+.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.theme { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface); }
+.theme button { border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600; font-size: 0.85rem; min-height: 44px; padding: 0 16px; border-radius: 999px; cursor: pointer; }
+.theme button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lede { color: var(--muted); margin-top: 12px; }
+.review { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+.review div { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; }
+.review ul { margin: 0; padding-left: 18px; color: var(--ink); display: flex; flex-direction: column; gap: 6px; }
+.review li::marker { color: var(--muted); }
+.dir { display: flex; flex-direction: column; gap: 20px; }
+.dir-head { display: flex; flex-direction: column; gap: 10px; }
+.dir-head .tag { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.traits { display: flex; flex-wrap: wrap; gap: 8px; }
+.traits span { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: 0.85rem; }
+.phones { display: flex; gap: 20px; overflow-x: auto; padding: 4px 2px 12px; scroll-snap-type: x proximity; }
+.cap { font-size: 0.82rem; color: var(--muted); margin-top: 10px; text-align: center; max-width: 280px; }
+.fig { flex: 0 0 auto; scroll-snap-align: start; }
+
+/* phone frames */
+.phone { width: 280px; height: 580px; border-radius: 36px; border: 6px solid var(--ink); overflow: hidden; position: relative; display: flex; flex-direction: column; font-size: 13px; line-height: 1.35; }
+.phone .status { height: 26px; flex: none; }
+.phone button { font: inherit; }
+
+/* ---------- Direction A ---------- */
+.A { background: var(--a-bg); color: var(--a-ink); }
+.A .scr { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.A .hd { padding: 6px 18px 10px; display: flex; justify-content: space-between; align-items: center; }
+.A .hd b { font-family: var(--display); font-weight: 500; font-size: 22px; }
+.A .ic { width: 44px; height: 44px; border-radius: 50%; background: var(--a-surface); border: 1px solid var(--a-line); display: grid; place-items: center; color: var(--a-ink); }
+.A .resume { margin: 4px 14px 12px; border-radius: 22px; padding: 16px; color: #fff; background: linear-gradient(160deg, var(--a-photo1), var(--a-photo2)); display: flex; flex-direction: column; gap: 4px; min-height: 132px; justify-content: flex-end; }
+.A .resume small { opacity: .8; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.A .resume b { font-family: var(--display); font-weight: 500; font-size: 24px; line-height: 1.1; }
+.A .go { align-self: flex-start; margin-top: 8px; height: 44px; padding: 0 18px; border-radius: 999px; border: 0; background: #fff; color: #16201a; font-weight: 700; }
+.A .lbl { padding: 0 18px 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--a-muted); }
+.A .row { margin: 0 14px 8px; background: var(--a-surface); border: 1px solid var(--a-line); border-radius: 18px; padding: 10px; display: flex; gap: 12px; align-items: center; min-height: 72px; }
+.A .thumb { width: 52px; height: 52px; border-radius: 14px; flex: none; background: linear-gradient(135deg, var(--a-photo1), var(--a-photo2)); }
+.A .row .t { flex: 1; min-width: 0; }
+.A .row b { display: block; font-size: 15px; }
+.A .row span { color: var(--a-muted); font-size: 12px; }
+.A .bar { height: 4px; border-radius: 4px; background: var(--a-line); margin-top: 6px; overflow: hidden; }
+.A .bar i { display: block; height: 100%; background: var(--a-accent); }
+.A .tabs { margin-top: auto; border-top: 1px solid var(--a-line); background: var(--a-surface); display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px 8px 14px; }
+.A .tabs div { height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; color: var(--a-muted); font-weight: 600; }
+.A .tabs .on { color: var(--a-accent); }
+.A .photo { flex: 1; min-height: 0; position: relative; background: linear-gradient(170deg, var(--a-photo1), var(--a-photo2)); }
+.A .photo .back { position: absolute; top: 4px; left: 12px; background: rgba(0,0,0,.35); color: #fff; border: 0; }
+.A .photo .pos { position: absolute; top: 14px; right: 14px; background: rgba(0,0,0,.35); color: #fff; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+.A .photo .edge { position: absolute; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,.7); font-size: 22px; }
+.A .sheet { background: var(--a-surface); border-radius: 26px 26px 0 0; margin-top: -26px; padding: 8px 18px 12px; position: relative; display: flex; flex-direction: column; gap: 8px; }
+.A .grip { width: 36px; height: 4px; border-radius: 4px; background: var(--a-line); margin: 0 auto; }
+.A .sheet h4 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 25px; line-height: 1.1; }
+.A .sheet em { font-family: var(--display); color: var(--a-muted); font-size: 15px; }
+.A .mark { background: var(--a-soft); border-radius: 14px; padding: 10px 12px; font-size: 13px; }
+.A .modes { margin: 8px 14px 14px; background: var(--a-surface); border: 1px solid var(--a-line); border-radius: 999px; padding: 4px; display: grid; grid-template-columns: repeat(3, 1fr); }
+.A .modes div { height: 44px; border-radius: 999px; display: grid; place-items: center; font-weight: 600; color: var(--a-muted); }
+.A .modes .on { background: var(--a-accent); color: var(--a-on); }
+.A .q { padding: 6px 18px 0; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.A .qprog { height: 4px; background: var(--a-line); border-radius: 4px; margin: 4px 18px 0; overflow: hidden; }
+.A .qprog i { display: block; height: 100%; width: 37%; background: var(--a-accent); }
+.A .qimg { height: 150px; border-radius: 22px; background: linear-gradient(150deg, var(--a-photo1), var(--a-photo2)); }
+.A .qq { font-family: var(--display); font-size: 22px; line-height: 1.15; }
+.A .opt { min-height: 54px; border-radius: 16px; border: 1.5px solid var(--a-line); background: var(--a-surface); padding: 8px 14px; display: flex; flex-direction: column; justify-content: center; font-weight: 600; font-size: 15px; }
+.A .opt span { font-weight: 400; font-style: italic; color: var(--a-muted); font-size: 12px; }
+.A .opt.ok { border-color: var(--a-good); background: var(--a-soft); }
+.A .opt.no { border-color: var(--a-bad); }
+
+/* ---------- Direction B ---------- */
+.B { background: var(--b-bg); color: var(--b-ink); font-family: var(--sans); }
+.B .scr { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 14px 14px; gap: 12px; }
+.B .hello { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
+.B .hello b { font-family: var(--chunk); font-weight: 800; font-size: 24px; letter-spacing: -.01em; }
+.B .streak { background: var(--b-sun); color: #2a1d00; font-weight: 800; border-radius: 999px; padding: 0 14px; height: 44px; display: inline-flex; align-items: center; gap: 4px; }
+.B .today { background: var(--b-accent); color: var(--b-on); border-radius: 26px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.B .today small { opacity: .8; font-weight: 600; }
+.B .today b { font-family: var(--chunk); font-weight: 800; font-size: 24px; line-height: 1.05; }
+.B .cta { height: 56px; border-radius: 18px; border: 0; background: var(--b-sun); color: #2a1d00; font-family: var(--chunk); font-weight: 800; font-size: 17px; }
+.B .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.B .tile { border-radius: 22px; padding: 12px; min-height: 118px; display: flex; flex-direction: column; justify-content: space-between; color: var(--b-tile-ink); }
+.B .tile.t1 { background: var(--b-t1); } .B .tile.t2 { background: var(--b-t2); } .B .tile.t3 { background: var(--b-t3); }
+.B .tile b { font-family: var(--chunk); font-weight: 800; font-size: 16px; line-height: 1.1; }
+.B .tile span { font-size: 12px; font-weight: 600; opacity: .75; }
+.B .tile .ring { width: 34px; height: 34px; border-radius: 50%; background: conic-gradient(var(--b-tile-ink) var(--p), rgba(128,128,128,.3) 0); display: grid; place-items: center; }
+.B .tile .ring::after { content: ''; width: 22px; height: 22px; border-radius: 50%; background: inherit; }
+.B .tile.t1 .ring::after { background: var(--b-t1); } .B .tile.t2 .ring::after { background: var(--b-t2); } .B .tile.t3 .ring::after { background: var(--b-t3); }
+.B .fab { position: absolute; right: 16px; bottom: 16px; width: 56px; height: 56px; border-radius: 20px; background: var(--b-ink); color: var(--b-bg); border: 0; font-size: 26px; }
+.B .stack { flex: 1; min-height: 0; position: relative; }
+.B .back2 { position: absolute; inset: 14px 14px -6px; border-radius: 28px; background: var(--b-line); }
+.B .card { position: absolute; inset: 0 0 8px; border-radius: 28px; background: var(--b-surface); overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 6px 20px rgba(15,27,45,.12); transform: rotate(-2deg) translateX(-6px); }
+.B .card .ph { flex: 1; background: linear-gradient(160deg, #3a6bff, #0f1b2d); position: relative; }
+.B .card .hint { position: absolute; top: 14px; left: 14px; background: var(--b-bad); color: #fff; font-weight: 800; border-radius: 12px; padding: 4px 10px; border: 2px solid #fff; transform: rotate(-8deg); }
+.B .card .nm { padding: 12px 16px 16px; font-family: var(--chunk); font-weight: 800; font-size: 22px; }
+.B .card .nm span { display: block; font-family: var(--sans); font-weight: 500; font-style: italic; font-size: 13px; color: var(--b-muted); }
+.B .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.B .grade div { height: 64px; border-radius: 20px; display: grid; place-items: center; font-family: var(--chunk); font-weight: 800; font-size: 16px; text-align: center; line-height: 1.1; }
+.B .grade .l { background: var(--b-surface); color: var(--b-bad); border: 2px solid var(--b-bad); }
+.B .grade .g { background: var(--b-good); color: #04170e; }
+.B .top2 { display: flex; align-items: center; gap: 10px; padding-top: 4px; }
+.B .top2 .x { width: 44px; height: 44px; border-radius: 50%; background: var(--b-surface); display: grid; place-items: center; border: 1px solid var(--b-line); }
+.B .pbar { flex: 1; height: 12px; border-radius: 12px; background: var(--b-line); overflow: hidden; }
+.B .pbar i { display: block; height: 100%; width: 40%; border-radius: 12px; background: var(--b-sun); }
+.B .qbox { background: var(--b-surface); border-radius: 24px; padding: 14px; font-family: var(--chunk); font-weight: 800; font-size: 19px; line-height: 1.15; }
+.B .qbox small { display: block; font-family: var(--sans); font-weight: 500; font-size: 12px; color: var(--b-muted); margin-bottom: 4px; }
+.B .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: 1; }
+.B .o { border-radius: 22px; background: var(--b-surface); border: 2px solid var(--b-line); padding: 12px; display: flex; flex-direction: column; justify-content: space-between; font-family: var(--chunk); font-weight: 800; font-size: 15px; line-height: 1.1; min-height: 100px; }
+.B .o i { font-style: normal; width: 26px; height: 26px; border-radius: 9px; background: var(--b-soft); color: var(--b-accent); display: grid; place-items: center; font-size: 12px; }
+.B .o.ok { border-color: var(--b-good); background: var(--b-soft); }
+.B .o.ok i { background: var(--b-good); color: #04170e; }
+.B .o.no { border-color: var(--b-bad); }
+.B .feed { background: var(--b-good); color: #04170e; border-radius: 18px; padding: 10px 14px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+
+.gestures { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 24px; }
+.gestures div { border-top: 1px solid var(--line); padding-top: 10px; }
+.gestures b { display: block; }
+.gestures span { color: var(--muted); font-size: 0.9rem; }
+.pick { border: 1px solid var(--line); background: var(--surface); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+@media (prefers-reduced-motion: no-preference) { .theme button { transition: background .15s; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div style="flex:1 1 320px">
+      <h1>FieldGuide, two ways forward</h1>
+      <p class="lede">A review of the current mobile UI, then two design directions to choose between. Nothing is built into the app yet. Use the switch to preview each in light and dark.</p>
+    </div>
+    <div class="theme" role="group" aria-label="Preview theme" id="theme">
+      <button type="button" data-t="auto" aria-pressed="true">Auto</button>
+      <button type="button" data-t="light" aria-pressed="false">Light</button>
+      <button type="button" data-t="dark" aria-pressed="false">Dark</button>
+    </div>
+  </header>
+
+  <section aria-labelledby="rev">
+    <h2 id="rev" style="margin-bottom:16px">What I found in the current app</h2>
+    <div class="review">
+      <div>
+        <h3>Works well</h3>
+        <ul>
+          <li>Study mode already has a bottom dock with a 46–50px primary button.</li>
+          <li>Swipe left and right moves between cards in Read mode.</li>
+          <li>Bottom sheets for menus and settings suit one-handed use.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Too busy</h3>
+        <ul>
+          <li>Home stacks a stats card, search, grouping toggle, folder button, folder chips, a section heading and folder headers before the first deck.</li>
+          <li>Each deck card repeats its folder as a pill, plus a menu, progress bar and three mode buttons.</li>
+          <li>The study header has a back button, title, settings, three-way mode switch, progress bar and filter chips above the card.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Touch and gestures</h3>
+        <ul>
+          <li>Measured on a 390px phone: the header icon buttons are 38px and the mode switcher is 32px tall. Both are under the 44px minimum.</li>
+          <li>Per-deck mode buttons are 32px tall. Many text sizes are 11–12px.</li>
+          <li>Swipe works only in Read. Recall and Quiz have no gesture. No dark/light option; the app is dark only.</li>
+          <li>Emoji double as icons, which render differently on each device.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="dir" aria-labelledby="da">
+    <div class="dir-head">
+      <span class="tag">Direction A</span>
+      <h2 id="da">Quiet Gallery</h2>
+      <p>Photo first, almost no chrome. The species is the hero and everything else steps back. Calm, closer to a printed field guide than a game.</p>
+      <div class="traits"><span>Serif names, sans UI</span><span>Moss green accent</span><span>3-tab bottom bar</span><span>Swipe-first study</span></div>
+    </div>
+    <div class="phones">
+      <figure class="fig" style="margin:0">
+        <div class="phone A"><div class="status"></div><div class="scr">
+          <div class="hd"><b>FieldGuide</b><div class="ic" aria-hidden="true">＋</div></div>
+          <div class="resume"><small>Continue</small><b>Bird Identification</b><span style="font-size:12px;opacity:.85">Recall · 5 of 8 mastered</span><button class="go" type="button">Resume</button></div>
+          <div class="lbl">Your decks</div>
+          <div class="row"><div class="thumb"></div><div class="t"><b>Flower Identification</b><span>8 cards · 2 mastered</span><div class="bar"><i style="width:25%"></i></div></div></div>
+          <div class="row"><div class="thumb"></div><div class="t"><b>Plane Identification</b><span>8 cards · new</span><div class="bar"><i style="width:0"></i></div></div></div>
+          <div class="tabs"><div class="on"><span>▦</span>Decks</div><div><span>◔</span>Progress</div><div><span>⚙</span>Settings</div></div>
+        </div></div>
+        <figcaption class="cap">Home. One resume card, then a plain list. Search and folders live behind the pull-down.</figcaption>
+      </figure>
+      <figure class="fig" style="margin:0">
+        <div class="phone A"><div class="status"></div><div class="scr">
+          <div class="photo"><button class="ic back" type="button" aria-label="Back">‹</button><span class="pos">3 / 8</span><span class="edge" style="left:10px">‹</span><span class="edge" style="right:10px">›</span></div>
+          <div class="sheet"><div class="grip"></div><h4>Peregrine Falcon</h4><em>Falco peregrinus</em><div class="mark"><b>Look for:</b> pointed wings, dark moustache stripe, barred chest.</div></div>
+          <div class="modes"><div class="on">Read</div><div>Recall</div><div>Quiz</div></div>
+        </div></div>
+        <figcaption class="cap">Read. Swipe the photo sideways for the next card. Drag the sheet up for full notes.</figcaption>
+      </figure>
+      <figure class="fig" style="margin:0">
+        <div class="phone A"><div class="status"></div><div class="scr">
+          <div class="hd" style="padding-bottom:0"><div class="ic" aria-hidden="true">✕</div><span style="font-weight:600;color:var(--a-muted)">3 of 8 · streak 2</span><span style="width:44px"></span></div>
+          <div class="qprog"><i></i></div>
+          <div class="q"><div class="qimg"></div><div class="qq">Which bird is this?</div>
+            <div class="opt">Barn Owl<span>Tyto alba</span></div>
+            <div class="opt ok">Peregrine Falcon<span>Falco peregrinus</span></div>
+            <div class="opt no">Common Kingfisher<span>Alcedo atthis</span></div>
+          </div>
+        </div></div>
+        <figcaption class="cap">Quiz. Full-width answers, 54px tall. Right answer turns green and the next question slides in.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="dir" aria-labelledby="db">
+    <div class="dir-head">
+      <span class="tag">Direction B</span>
+      <h2 id="db">Daily Trainer</h2>
+      <p>A practice habit first. The home screen answers "what should I study today", and study mode uses large cards you throw left or right. More energy, chunkier shapes.</p>
+      <div class="traits"><span>Rounded display type</span><span>Cobalt and sun accents</span><span>2-column deck tiles</span><span>Swipe to grade</span></div>
+    </div>
+    <div class="phones">
+      <figure class="fig" style="margin:0">
+        <div class="phone B"><div class="status"></div><div class="scr">
+          <div class="hello"><b>Today</b><span class="streak">4-day streak</span></div>
+          <div class="today"><small>12 cards due</small><b>Keep your streak going</b><button class="cta" type="button">Practice now</button></div>
+          <div class="grid">
+            <div class="tile t1"><span class="ring" style="--p:60%"></span><div><b>Birds</b><span>8 cards</span></div></div>
+            <div class="tile t2"><span class="ring" style="--p:25%"></span><div><b>Flowers</b><span>8 cards</span></div></div>
+            <div class="tile t3"><span class="ring" style="--p:0%"></span><div><b>Planes</b><span>8 cards</span></div></div>
+          </div>
+          <button class="fab" type="button" aria-label="New deck">＋</button>
+        </div></div>
+        <figcaption class="cap">Home. A single daily goal, then deck tiles with a progress ring. Tap a tile to pick Read, Recall or Quiz.</figcaption>
+      </figure>
+      <figure class="fig" style="margin:0">
+        <div class="phone B"><div class="status"></div><div class="scr">
+          <div class="top2"><div class="x" aria-hidden="true">✕</div><div class="pbar"><i></i></div><span style="font-weight:700">3/8</span></div>
+          <div class="stack"><div class="back2"></div><div class="card"><div class="ph"><span class="hint">AGAIN</span></div><div class="nm">Peregrine Falcon<span>Falco peregrinus</span></div></div></div>
+          <div class="grade"><div class="l">← Still<br>learning</div><div class="g">Got it →</div></div>
+        </div></div>
+        <figcaption class="cap">Recall. Drag the card left or right to grade it, or tap the 64px buttons. Tap the card to flip.</figcaption>
+      </figure>
+      <figure class="fig" style="margin:0">
+        <div class="phone B"><div class="status"></div><div class="scr">
+          <div class="top2"><div class="x" aria-hidden="true">✕</div><div class="pbar"><i></i></div><span style="font-weight:700">Streak 2</span></div>
+          <div class="qbox"><small>Photo → common name</small>Which bird is this?</div>
+          <div class="opts">
+            <div class="o"><i>A</i>Barn Owl</div>
+            <div class="o ok"><i>B</i>Peregrine Falcon</div>
+            <div class="o no"><i>C</i>Kingfisher</div>
+            <div class="o"><i>D</i>Puffin</div>
+          </div>
+          <div class="feed"><span>Spot on!</span><span>Next ›</span></div>
+        </div></div>
+        <figcaption class="cap">Quiz. A 2×2 grid of large tiles within thumb reach, with a clear result bar beneath.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section aria-labelledby="sh">
+    <h2 id="sh" style="margin-bottom:16px">Shared by both directions</h2>
+    <div class="gestures">
+      <div><b>Light, dark, or system</b><span>Three-way setting, remembered. Defaults to your phone's setting.</span></div>
+      <div><b>44px minimum targets</b><span>Icon buttons, mode switch and rows. Primary actions are 54–64px.</span></div>
+      <div><b>Swipe in every mode</b><span>Sideways to move or grade. Down on the study sheet to close, up for more.</span></div>
+      <div><b>Fewer things on screen</b><span>Search, folders and filters move behind one control. Deck actions use long-press or a sheet.</span></div>
+      <div><b>Drawn icons, not emoji</b><span>One consistent icon set, so it looks the same on every phone.</span></div>
+      <div><b>Reduced motion respected</b><span>Card flips and slides are skipped when the device asks for it.</span></div>
+    </div>
+  </section>
+
+  <section class="pick">
+    <h2>Which one?</h2>
+    <p><b>A, Quiet Gallery</b> if you mostly browse and look at the photos. It is the calmer of the two and the closest to your current layout, so it is the smaller change.</p>
+    <p><b>B, Daily Trainer</b> if you want to drill and build a habit. It changes the home screen and study flow more, and the swipe-to-grade gesture is the main new idea.</p>
+    <p style="color:var(--muted)">You can also mix them, for example A's study screens with B's home. Tell me which, plus anything you would change, and I will build it into the app.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, btns = document.querySelectorAll('#theme button');
+  function set(t) {
+    if (t === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t);
+    btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.t === t)); });
+  }
+  btns.forEach(function (b) { b.addEventListener('click', function () { set(b.dataset.t); }); });
+})();
+</script>
