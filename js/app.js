@@ -12,9 +12,23 @@ import {
   resolveSingleCardWikiImage,
   getBestCardImageSrc,
   createFallbackSvgDataUrl,
-  cacheDeckImagesToIndexedDB
+  cacheDeckImagesToIndexedDB,
+  setLocalCardImage,
+  deleteCardData,
+  getCachedImageRecord
 } from './db.js';
-import { AI_DECK_PROMPT_TEMPLATE } from '../data/starter-decks.js';
+import {
+  AI_PROVIDERS,
+  loadAiSettings,
+  saveAiSettings,
+  getActiveConnection,
+  isAiConfigured,
+  listModels,
+  testConnection,
+  generateDeckJson,
+  generateMoreCardsJson
+} from './ai.js';
+import { AI_DECK_PROMPT_TEMPLATE, STARTER_DECKS } from '../data/starter-decks.js';
 
 const state = {
   view: 'home', // 'home' | 'study'
@@ -70,15 +84,39 @@ const state = {
   renameFolderInput: '',
 
   // Menus / Bottom Sheets
-  activeSheet: null, // null | 'study-options' | 'deck-context' | 'add-deck' | 'home-menu' | 'manage-folders'
+  activeSheet: null, // null | 'study-options' | 'deck-context' | 'add-deck' | 'home-menu' | 'manage-folders' | 'ai-settings' | 'deck-cards' | 'card-editor'
   contextDeckId: null,
-  addDeckTab: 'paste', // 'paste' | 'prompt'
+  addDeckTab: 'paste', // 'generate' | 'write' | 'paste' | 'prompt'
   confirmAction: null, // null | 'reset-progress' | 'delete-deck' | 'restore-starters'
   importTopicInput: '',
   importRawText: '',
   importAutoDownload: true,
   lightboxUrl: null,
-  lightboxCaption: ''
+  lightboxCaption: '',
+
+  // AI connection (bring your own key)
+  aiSettings: loadAiSettings(),
+  aiDraft: null, // editable copy while the connection sheet is open
+  aiReturnSheet: null,
+  aiModelOptions: [],
+  aiLoadingModels: false,
+  aiTesting: false,
+  aiBusy: false, // a generation request is in flight
+  aiGenerateCount: 10,
+  aiMoreCount: 10,
+  aiMoreGuidance: '',
+
+  // Write-your-own deck & card editor
+  manualDeckTitle: '',
+  manualDeckIcon: '',
+  cardsDeckId: null,
+  editorDeckId: null,
+  editorCardId: null, // null while adding a new card
+  editorDraft: null,
+  editorPhotoBlob: null,
+  editorPhotoPreview: null,
+  editorRemovePhoto: false,
+  editorHasLocalPhoto: false
 };
 
 const appRoot = document.getElementById('app');
@@ -190,6 +228,7 @@ const ICON_PATHS = {
   tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1"/>',
   fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   crop: '<path d="M6 2v14a2 2 0 002 2h14M2 6h14a2 2 0 012 2v14"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
   dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="12" cy="12" r="1"/>'
 };
 
@@ -765,6 +804,24 @@ function parsePlainTextDeck(text) {
   ];
 }
 
+function normalizeJsonCard(c, deckId, cIdx) {
+  return {
+    id: c.id || `${deckId}-card-${cIdx}-${Math.random().toString(36).slice(2, 6)}`,
+    name: c.name || c.title || c.commonName || `Item ${cIdx + 1}`,
+    subtitle: c.subtitle || c.scientificName || c.latinName || c.model || '',
+    badge: c.badge || c.family || c.category || c.tag || '',
+    imageUrl: c.imageUrl || c.image || c.photo || '',
+    description: c.description || c.about || c.notes || c.info || '',
+    keyFeatures: c.keyFeatures || c.features || c.tips || c.identification || '',
+    sourceUrl:
+      c.sourceUrl ||
+      c.url ||
+      c.link ||
+      c.wikipedia ||
+      `https://en.wikipedia.org/wiki/${encodeURIComponent((c.name || c.title || '').replace(/ /g, '_'))}`
+  };
+}
+
 function normalizeJsonDecks(parsed) {
   const deckArray = Array.isArray(parsed)
     ? parsed[0] && parsed[0].cards
@@ -774,21 +831,7 @@ function normalizeJsonDecks(parsed) {
 
   return deckArray.map((d, dIdx) => {
     const deckId = d.id || `deck-custom-${Date.now()}-${dIdx}`;
-    const cards = (d.cards || d.items || []).map((c, cIdx) => ({
-      id: c.id || `${deckId}-card-${cIdx}-${Math.random().toString(36).slice(2, 6)}`,
-      name: c.name || c.title || c.commonName || `Item ${cIdx + 1}`,
-      subtitle: c.subtitle || c.scientificName || c.latinName || c.model || '',
-      badge: c.badge || c.family || c.category || c.tag || '',
-      imageUrl: c.imageUrl || c.image || c.photo || '',
-      description: c.description || c.about || c.notes || c.info || '',
-      keyFeatures: c.keyFeatures || c.features || c.tips || c.identification || '',
-      sourceUrl:
-        c.sourceUrl ||
-        c.url ||
-        c.link ||
-        c.wikipedia ||
-        `https://en.wikipedia.org/wiki/${encodeURIComponent((c.name || c.title || '').replace(/ /g, '_'))}`
-    }));
+    const cards = (d.cards || d.items || []).map((c, cIdx) => normalizeJsonCard(c, deckId, cIdx));
 
     return {
       id: deckId,
@@ -833,35 +876,382 @@ async function handleImportDeckSubmit() {
       return;
     }
 
-    const customFolder = state.importFolderInput.trim();
-    if (customFolder) {
-      for (const deck of decks) {
-        deck.category = customFolder;
-      }
-      if (!state.customFolders.includes(customFolder)) {
-        state.customFolders.push(customFolder);
-        saveCustomFolders();
-      }
-    }
-
-    showToast('Fetching photos from Wikipedia...');
-    for (const deck of decks) {
-      await resolveDeckWikipediaImages(deck);
-      await saveDeck(deck);
-    }
-
-    await refreshData();
-    state.activeSheet = null;
+    await saveNewDecks(decks);
     state.importRawText = '';
-    state.importFolderInput = '';
-    showToast(`Added "${decks[0].title}" (${decks[0].cards.length} cards)!`);
-    render();
-
-    if (state.importAutoDownload && decks[0]) {
-      downloadDeckOffline(decks[0].id);
-    }
   } catch (err) {
     showToast(`Error parsing text: ${err.message}`);
+  }
+}
+
+// Shared by paste/upload import and AI generation: folder, Wikipedia photos, save, offline download.
+async function saveNewDecks(decks) {
+  const customFolder = state.importFolderInput.trim();
+  if (customFolder) {
+    for (const deck of decks) {
+      deck.category = customFolder;
+    }
+    if (!state.customFolders.includes(customFolder)) {
+      state.customFolders.push(customFolder);
+      saveCustomFolders();
+    }
+  }
+
+  showToast('Fetching photos from Wikipedia...');
+  for (const deck of decks) {
+    await resolveDeckWikipediaImages(deck);
+    await saveDeck(deck);
+  }
+
+  await refreshData();
+  state.activeSheet = null;
+  state.importFolderInput = '';
+  showToast(`Added "${decks[0].title}" (${decks[0].cards.length} cards)!`);
+  render();
+
+  if (state.importAutoDownload && decks[0]) {
+    downloadDeckOffline(decks[0].id);
+  }
+}
+
+// --- AI CONNECTION & IN-APP GENERATION ---
+function openAiSettings(returnSheet = null) {
+  state.aiDraft = JSON.parse(JSON.stringify(state.aiSettings));
+  state.aiReturnSheet = returnSheet;
+  state.aiModelOptions = [];
+  state.confirmAction = null;
+  state.activeSheet = 'ai-settings';
+  render();
+}
+
+function readAiDraftInputs() {
+  const conn = state.aiDraft.providers[state.aiDraft.provider];
+  const keyEl = document.getElementById('ai-key-input');
+  const modelEl = document.getElementById('ai-model-input');
+  const baseEl = document.getElementById('ai-base-input');
+  if (keyEl) conn.apiKey = keyEl.value.trim();
+  if (modelEl) conn.model = modelEl.value.trim();
+  if (baseEl) conn.baseUrl = baseEl.value.trim();
+}
+
+function saveAiDraft() {
+  readAiDraftInputs();
+  state.aiSettings = state.aiDraft;
+  saveAiSettings(state.aiSettings);
+  showToast(
+    isAiConfigured(state.aiSettings)
+      ? `Saved ${AI_PROVIDERS[state.aiSettings.provider].label} connection.`
+      : 'Saved. Add the missing details to start generating.'
+  );
+  state.activeSheet = state.aiReturnSheet;
+  state.aiReturnSheet = null;
+  render();
+}
+
+async function loadAiModels() {
+  readAiDraftInputs();
+  state.aiLoadingModels = true;
+  render();
+  try {
+    state.aiModelOptions = await listModels(state.aiDraft);
+    showToast(state.aiModelOptions.length ? `Found ${state.aiModelOptions.length} models.` : 'No models found.');
+  } catch (err) {
+    showToast(`Couldn't load models: ${err.message}`);
+  }
+  state.aiLoadingModels = false;
+  render();
+}
+
+async function runAiConnectionTest() {
+  readAiDraftInputs();
+  if (!isAiConfigured(state.aiDraft)) {
+    showToast('Fill in the key, model and address first.');
+    return;
+  }
+  state.aiTesting = true;
+  render();
+  try {
+    const reply = await testConnection(state.aiDraft);
+    showToast(`Connected! Model replied: "${reply}"`);
+  } catch (err) {
+    showToast(`Connection failed: ${err.message}`);
+  }
+  state.aiTesting = false;
+  render();
+}
+
+async function generateDeckWithAi() {
+  const topicEl = document.getElementById('ai-topic-input');
+  if (topicEl) state.importTopicInput = topicEl.value.trim();
+  const folderEl = document.getElementById('import-folder-input');
+  if (folderEl) state.importFolderInput = folderEl.value;
+  const topic = state.importTopicInput.trim();
+  if (!topic) {
+    showToast('Type a topic to generate a deck about.');
+    return;
+  }
+  if (state.aiBusy) return;
+  state.aiBusy = true;
+  render();
+  try {
+    const raw = await generateDeckJson(state.aiSettings, topic, state.aiGenerateCount);
+    const decks = parseAnyDeckInput(raw);
+    if (!decks.length || !decks[0].cards.length) throw new Error('The reply had no cards in it. Try again.');
+    decks.length = 1;
+    const deck = decks[0];
+    deck.id = `deck-ai-${Date.now()}`;
+    for (const card of deck.cards) card.id = makeCardId(deck.id);
+    if (deck.title === 'Custom Deck' || deck.title === 'Imported Deck') deck.title = topic;
+    state.aiBusy = false;
+    await saveNewDecks(decks);
+    state.importTopicInput = '';
+  } catch (err) {
+    state.aiBusy = false;
+    showToast(`Generation failed: ${err.message}`);
+    render();
+  }
+}
+
+async function generateMoreCardsWithAi(deckId) {
+  const deck = getDeckById(deckId);
+  if (!deck || state.aiBusy) return;
+  const guidanceEl = document.getElementById('ai-more-guidance');
+  if (guidanceEl) state.aiMoreGuidance = guidanceEl.value.trim();
+  state.aiBusy = true;
+  render();
+  try {
+    const raw = await generateMoreCardsJson(state.aiSettings, deck, state.aiMoreCount, state.aiMoreGuidance);
+    const parsed = parseAnyDeckInput(raw);
+    const existingNames = new Set(deck.cards.map((c) => (c.name || '').trim().toLowerCase()));
+    const fresh = [];
+    for (const card of parsed[0]?.cards || []) {
+      const key = (card.name || '').trim().toLowerCase();
+      if (!key || existingNames.has(key)) continue;
+      existingNames.add(key);
+      fresh.push({ ...card, id: makeCardId(deck.id), userAdded: true });
+    }
+    if (!fresh.length) throw new Error('No new cards came back (they may all be duplicates).');
+    deck.cards.push(...fresh);
+    await resolveDeckWikipediaImages(deck);
+    await saveDeck(deck);
+    state.aiMoreGuidance = '';
+    resyncStudySession(deck.id);
+    showToast(`Added ${fresh.length} new cards to "${deck.title}".`);
+  } catch (err) {
+    showToast(`Generation failed: ${err.message}`);
+  }
+  state.aiBusy = false;
+  render();
+}
+
+// --- WRITE YOUR OWN DECKS & CARDS ---
+function makeCardId(deckId) {
+  return `${deckId}-card-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function isHttpUrl(url) {
+  return /^https?:\/\//i.test(String(url || '').trim());
+}
+
+async function createManualDeck() {
+  const titleEl = document.getElementById('manual-title-input');
+  const iconEl = document.getElementById('manual-icon-input');
+  const folderEl = document.getElementById('import-folder-input');
+  if (titleEl) state.manualDeckTitle = titleEl.value;
+  if (iconEl) state.manualDeckIcon = iconEl.value;
+  if (folderEl) state.importFolderInput = folderEl.value;
+  const title = state.manualDeckTitle.trim();
+  if (!title) {
+    showToast('Give your deck a name first.');
+    return;
+  }
+  const folder = state.importFolderInput.trim() || 'Custom Collection';
+  const deck = {
+    id: `deck-custom-${Date.now()}`,
+    title,
+    category: folder,
+    icon: state.manualDeckIcon.trim() || '📚',
+    color: '#6366f1',
+    description: 'Cards written by hand.',
+    createdAt: new Date().toISOString(),
+    cards: []
+  };
+  await saveDeck(deck);
+  if (!state.customFolders.includes(folder)) {
+    state.customFolders.push(folder);
+    saveCustomFolders();
+  }
+  await refreshData();
+  state.manualDeckTitle = '';
+  state.manualDeckIcon = '';
+  state.importFolderInput = '';
+  state.cardsDeckId = deck.id;
+  openCardEditor(deck.id, null);
+}
+
+function openDeckCards(deckId) {
+  state.cardsDeckId = deckId;
+  state.confirmAction = null;
+  state.activeSheet = 'deck-cards';
+  render();
+}
+
+async function openCardEditor(deckId, cardId) {
+  const deck = getDeckById(deckId);
+  if (!deck) return;
+  const card = cardId ? deck.cards.find((c) => c.id === cardId) : null;
+  state.editorHasLocalPhoto = card ? (await getCachedImageRecord(card.id))?.resolvedUrl === 'local' : false;
+  state.editorDeckId = deckId;
+  state.editorCardId = card ? card.id : null;
+  state.editorDraft = {
+    name: card?.name || '',
+    subtitle: card?.subtitle || '',
+    badge: card?.badge || '',
+    keyFeatures: card?.keyFeatures || '',
+    description: card?.description || '',
+    sourceUrl: card?.sourceUrl || '',
+    imageUrl: card?.imageUrl || '',
+    autoImage: card ? !card.noAutoImage : true
+  };
+  clearEditorPhoto();
+  state.editorRemovePhoto = false;
+  state.confirmAction = null;
+  state.activeSheet = 'card-editor';
+  render();
+  document.querySelector('.bottom-sheet')?.scrollTo({ top: 0 });
+}
+
+function clearEditorPhoto() {
+  if (state.editorPhotoPreview) URL.revokeObjectURL(state.editorPhotoPreview);
+  state.editorPhotoBlob = null;
+  state.editorPhotoPreview = null;
+}
+
+function readEditorInputs() {
+  const d = state.editorDraft;
+  if (!d) return;
+  for (const [field, id] of [
+    ['name', 'card-name-input'],
+    ['subtitle', 'card-subtitle-input'],
+    ['badge', 'card-badge-input'],
+    ['keyFeatures', 'card-features-input'],
+    ['description', 'card-about-input'],
+    ['sourceUrl', 'card-link-input'],
+    ['imageUrl', 'card-image-url-input']
+  ]) {
+    const el = document.getElementById(id);
+    if (el) d[field] = el.value;
+  }
+  const autoEl = document.getElementById('card-auto-image');
+  if (autoEl) d.autoImage = autoEl.checked;
+}
+
+// Shrinks large phone photos so IndexedDB stays small; falls back to the original file.
+async function downscalePhoto(file, maxSide = 1280) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 600 * 1024) return file;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    return blob || file;
+  } catch (_) {
+    return file;
+  }
+}
+
+async function saveEditorCard(addAnother = false) {
+  readEditorInputs();
+  const deck = getDeckById(state.editorDeckId);
+  const d = state.editorDraft;
+  if (!deck || !d) return;
+  const name = d.name.trim();
+  if (!name) {
+    showToast('Every card needs a name.');
+    return;
+  }
+  const link = d.sourceUrl.trim();
+  const imageUrl = d.imageUrl.trim();
+  if (link && !isHttpUrl(link)) {
+    showToast('The link must start with http:// or https://');
+    return;
+  }
+  if (imageUrl && !isHttpUrl(imageUrl)) {
+    showToast('The image address must start with http:// or https://');
+    return;
+  }
+
+  const existing = state.editorCardId ? deck.cards.find((c) => c.id === state.editorCardId) : null;
+  const card = existing || { id: makeCardId(deck.id) };
+  const imageChanged = existing && (existing.imageUrl || '') !== imageUrl;
+  Object.assign(card, {
+    name,
+    subtitle: d.subtitle.trim(),
+    badge: d.badge.trim(),
+    keyFeatures: d.keyFeatures.trim(),
+    description: d.description.trim(),
+    sourceUrl: link,
+    imageUrl,
+    noAutoImage: !d.autoImage,
+    userAdded: true
+  });
+  if (!existing) deck.cards.push(card);
+
+  if (state.editorPhotoBlob) {
+    await setLocalCardImage(card.id, deck.id, state.editorPhotoBlob);
+  } else if (state.editorRemovePhoto || imageChanged) {
+    await deleteCardData(card.id, { keepProgress: true });
+  }
+  if (!card.imageUrl && d.autoImage && !state.editorPhotoBlob) {
+    await resolveSingleCardWikiImage(card, null);
+  }
+  await saveDeck(deck);
+  state.cachedCountByDeck[deck.id] = (await getDeckCachedImageIds(deck.id)).size;
+  resyncStudySession(deck.id);
+  showToast(existing ? `Saved "${name}".` : `Added "${name}" (${deck.cards.length} cards).`);
+
+  if (addAnother) {
+    openCardEditor(deck.id, null);
+  } else {
+    clearEditorPhoto();
+    state.editorDraft = null;
+    openDeckCards(deck.id);
+  }
+}
+
+async function deleteCardFromDeck(deckId, cardId) {
+  const deck = getDeckById(deckId);
+  if (!deck) return;
+  deck.cards = deck.cards.filter((c) => c.id !== cardId);
+  if (STARTER_DECKS.some((d) => d.id === deck.id)) {
+    deck.removedCardIds = [...new Set([...(deck.removedCardIds || []), cardId])];
+  }
+  await saveDeck(deck);
+  await deleteCardData(cardId);
+  delete state.progressMap[cardId];
+  state.cachedCountByDeck[deck.id] = (await getDeckCachedImageIds(deck.id)).size;
+  resyncStudySession(deck.id);
+  state.confirmAction = null;
+  showToast('Card deleted.');
+  render();
+}
+
+// Rebuilds the open study session after its deck's cards change.
+function resyncStudySession(deckId) {
+  if (state.view !== 'study' || state.activeDeckId !== deckId) return;
+  const deck = getActiveDeck();
+  if (!deck?.cards.length) {
+    state.view = 'home';
+    return;
+  }
+  if (state.studyMode === 'browse') {
+    state.browseIndex = Math.min(state.browseIndex, Math.max(0, getFilteredBrowseCards().length - 1));
+  } else if (state.studyMode === 'recall') {
+    setupRecallSession();
+  } else {
+    setupQuizSession();
   }
 }
 
@@ -925,7 +1315,7 @@ function render() {
 function renderFab() {
   return `
     <div class="fab-wrap">
-      <button class="fab" data-action="open-add-deck" data-tab="paste" aria-label="Add a new deck">
+      <button class="fab" data-action="open-add-deck" data-tab="auto" aria-label="Add a new deck">
         ${icon('plus')}<span>New deck</span>
       </button>
     </div>
@@ -1083,7 +1473,7 @@ function renderHomeView() {
               ? `<button class="btn btn-secondary" data-action="reset-home-filters">Show all decks (${state.decks.length})</button>`
               : ''
           }
-          <button class="btn btn-primary" data-action="open-add-deck" data-tab="paste">Add a deck</button>
+          <button class="btn btn-primary" data-action="open-add-deck" data-tab="auto">Add a deck</button>
         </div>
       </div>
     `;
@@ -1168,8 +1558,8 @@ function renderStudyView() {
 }
 
 // --- SHARED STUDY PIECES ---
-function renderMediaFrame(card, deck, { cls = '', badge = false, status = false, alt = '', caption = '', zoom = true } = {}) {
-  const imgSrc = getBestCardImageSrc(card, deck.color);
+function renderMediaFrame(card, deck, { cls = '', badge = false, status = false, alt = '', caption = '', zoom = true, mystery = false } = {}) {
+  const imgSrc = getBestCardImageSrc(card, deck.color, { mystery });
   const st = getCardStatus(card.id);
   const statusLabel =
     st === 'mastered' ? `${icon('check', 'xs')} Mastered` : st === 'learning' ? 'Learning' : 'Unseen';
@@ -1180,6 +1570,7 @@ function renderMediaFrame(card, deck, { cls = '', badge = false, status = false,
         src="${esc(imgSrc)}"
         alt="${esc(alt)}"
         data-card-id="${esc(card.id)}"
+        ${mystery ? 'data-mystery="true"' : ''}
         class="media-img ${state.imageFitContain ? 'contain' : ''}"
         ${zoom ? `data-action="open-lightbox" data-caption="${esc(caption)}"` : 'style="cursor:pointer"'}
       />
@@ -1218,10 +1609,10 @@ function renderCardDetails(card, { aboutLabel = 'About', showLink = true } = {})
         : ''
     }
     ${
-      showLink && card.sourceUrl
+      showLink && isHttpUrl(card.sourceUrl)
         ? `<div class="card-footer-row">
             <a href="${esc(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="source-link">
-              <span>Wikipedia</span>${icon('external', 'xs')}
+              <span>${card.sourceUrl.includes('wikipedia.org') ? 'Wikipedia' : 'Source'}</span>${icon('external', 'xs')}
             </a>
           </div>`
         : ''
@@ -1306,7 +1697,7 @@ function renderRecallMode(deck) {
           <article class="recall-prompt-card" data-action="flip-card">
             ${
               state.recallPromptType === 'image-first'
-                ? `${renderMediaFrame(card, deck, { cls: 'tall', badge: true, alt: 'Mystery subject', zoom: false })}
+                ? `${renderMediaFrame(card, deck, { cls: 'tall', badge: true, alt: 'Mystery subject', zoom: false, mystery: true })}
                    <div class="recall-prompt-title">What is this?</div>`
                 : `<div style="min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px;text-align:center;gap:12px;">
                     ${card.badge ? `<span class="source-link">${esc(card.badge)}</span>` : ''}
@@ -1469,7 +1860,8 @@ function renderQuizMode(deck) {
           : renderMediaFrame(targetCard, deck, {
               cls: 'quiz-frame',
               alt: answered ? targetCard.name : 'Quiz question',
-              caption: answered ? targetCard.name : 'Mystery subject'
+              caption: answered ? targetCard.name : 'Mystery subject',
+              mystery: !answered
             })
       }
       <div class="quiz-question">${esc(qQuestions[qType] || 'Which one is this?')}</div>
@@ -1603,16 +1995,34 @@ function renderBottomSheet() {
           <div class="sheet-section">
             <div class="sheet-section-label">Create &amp; Organize</div>
             <div class="sheet-menu-list">
+              <button class="sheet-item" data-action="open-add-deck" data-tab="generate">
+                <span class="sheet-item-label">${icon('sparkle', 'sm')} Generate a deck with AI</span>
+                <span>${icon('next', 'sm')}</span>
+              </button>
+              <button class="sheet-item" data-action="open-add-deck" data-tab="write">
+                <span class="sheet-item-label">${icon('pencil', 'sm')} Write your own deck</span>
+                <span>${icon('next', 'sm')}</span>
+              </button>
               <button class="sheet-item" data-action="open-add-deck" data-tab="paste">
                 <span class="sheet-item-label">${icon('doc', 'sm')} Paste text or upload a deck file</span>
                 <span>${icon('next', 'sm')}</span>
               </button>
               <button class="sheet-item" data-action="open-add-deck" data-tab="prompt">
-                <span class="sheet-item-label">${icon('sparkle', 'sm')} AI deck prompt generator</span>
+                <span class="sheet-item-label">${icon('clipboard', 'sm')} Copy a prompt for another AI chat</span>
                 <span>${icon('next', 'sm')}</span>
               </button>
               <button class="sheet-item" data-action="open-sheet" data-sheet="manage-folders">
                 <span class="sheet-item-label">${icon('folder', 'sm')} Manage folders (${folderStats.length})</span>
+                <span>${icon('next', 'sm')}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="sheet-section">
+            <div class="sheet-section-label">AI connection</div>
+            <div class="sheet-menu-list">
+              <button class="sheet-item" data-action="open-ai-settings">
+                <span class="sheet-item-label">${icon('key', 'sm')} ${esc(renderAiStatusText())}</span>
                 <span>${icon('next', 'sm')}</span>
               </button>
             </div>
@@ -1625,7 +2035,7 @@ function renderBottomSheet() {
                 ? `
                   <div class="inline-confirm-box">
                     <div style="font-size:0.84rem;font-weight:650;color:var(--text-main);">
-                      Restore built-in starter decks to their default cards?
+                      Restore built-in starter decks to their default cards? Cards you added are kept.
                     </div>
                     <div class="dock-row">
                       <button class="btn btn-secondary" data-action="cancel-confirm" style="flex:1;padding:9px;">Cancel</button>
@@ -1748,7 +2158,7 @@ function renderBottomSheet() {
     `;
   }
 
-  // 3. UNIFIED 2-TAB "ADD / CREATE DECK" SHEET
+  // 3. "ADD / CREATE DECK" SHEET: AI generate, write your own, paste/upload, copy a prompt
   if (state.activeSheet === 'add-deck') {
     const promptPreview = AI_DECK_PROMPT_TEMPLATE(state.importTopicInput);
 
@@ -1761,129 +2171,31 @@ function renderBottomSheet() {
             <button class="sheet-close-btn" data-action="close-sheet" aria-label="Close">${icon('close', 'sm')}</button>
           </div>
 
-          <div class="mode-segmented" role="tablist">
-            <button
-              class="mode-seg-btn ${state.addDeckTab === 'paste' ? 'active' : ''}"
-              data-action="switch-add-tab"
-              data-tab="paste"
-            >
-              ${icon('doc', 'sm')}<span>Paste deck</span>
-            </button>
-            <button
-              class="mode-seg-btn ${state.addDeckTab === 'prompt' ? 'active' : ''}"
-              data-action="switch-add-tab"
-              data-tab="prompt"
-            >
-              ${icon('sparkle', 'sm')}<span>AI prompt</span>
-            </button>
+          <div class="mode-segmented" role="tablist" style="--cols:4;">
+            ${[
+              ['generate', 'sparkle', 'AI'],
+              ['write', 'pencil', 'Write'],
+              ['paste', 'doc', 'Paste'],
+              ['prompt', 'clipboard', 'Prompt']
+            ]
+              .map(
+                ([tab, ic, label]) => `
+                  <button class="mode-seg-btn ${state.addDeckTab === tab ? 'active' : ''}" data-action="switch-add-tab" data-tab="${tab}">
+                    ${icon(ic, 'sm')}<span>${label}</span>
+                  </button>`
+              )
+              .join('')}
           </div>
 
-          ${
-            state.addDeckTab === 'paste'
-              ? `
-                <div class="sheet-section">
-                  <div class="sheet-section-label">Save to folder (optional)</div>
-                  <input
-                    type="text"
-                    id="import-folder-input"
-                    class="form-input"
-                    placeholder="e.g. Nature & Wildlife, Aviation, Exams..."
-                    value="${esc(state.importFolderInput)}"
-                  />
-                  ${
-                    folderStats.length > 0
-                      ? `<div class="study-filter-strip" style="padding-top:2px;">
-                          ${folderStats
-                            .map(
-                              (f) => `
-                                <button
-                                  type="button"
-                                  class="filter-chip ${state.importFolderInput === f.name ? 'active' : ''}"
-                                  data-action="pick-import-folder"
-                                  data-folder="${esc(f.name)}"
-                                >
-                                  <span>${esc(f.name)}</span>
-                                </button>
-                              `
-                            )
-                            .join('')}
-                        </div>`
-                      : ''
-                  }
-                </div>
-
-                <div class="sheet-section">
-                  <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <span class="sheet-section-label">Paste AI Reply or JSON</span>
-                    <button class="hint-pill-btn" data-action="paste-clipboard">${icon('clipboard', 'xs')} Paste clipboard</button>
-                  </div>
-                  <textarea
-                    id="json-paste-area"
-                    class="form-textarea"
-                    style="min-height:155px;"
-                    placeholder="TITLE: Australian Birds&#10;CATEGORY: Nature &amp; Wildlife&#10;ICON: 🦜&#10;&#10;---&#10;NAME: Laughing Kookaburra&#10;SUBTITLE: Dacelo novaeguineae&#10;BADGE: Kingfisher&#10;FEATURES: Heavy bill, dark eye-stripe&#10;ABOUT: Famous for its laughing call.&#10;LINK: https://en.wikipedia.org/wiki/Laughing_kookaburra"
-                  >${esc(state.importRawText)}</textarea>
-                </div>
-
-                <div class="sheet-section">
-                  <div class="sheet-section-label">Or Upload a .txt / .json File</div>
-                  <input type="file" id="json-file-input" accept=".txt,.json,text/plain,application/json" class="form-input" />
-                </div>
-
-                <div class="dock-row" style="margin-top:2px;">
-                  <button class="btn btn-secondary" data-action="switch-add-tab" data-tab="prompt" style="flex:1;">
-                    Get AI prompt
-                  </button>
-                  <button class="btn btn-primary" data-action="submit-import-json" style="flex:1.3;">
-                    Create deck
-                  </button>
-                </div>
-              `
-              : `
-                <div class="info-block" style="font-size:0.8rem;">
-                  <div class="info-block-label">3-Step AI Deck Builder</div>
-                  1. Type any topic below &amp; tap <strong>Copy AI Prompt</strong>.<br/>
-                  2. Paste into ChatGPT, Claude, or Gemini.<br/>
-                  3. Copy the AI's reply and paste it in the <strong>Paste / Upload</strong> tab! (Wikipedia photos are resolved automatically.)
-                </div>
-
-                <div class="sheet-section">
-                  <div class="sheet-section-label">Topic to Generate</div>
-                  <div style="display:flex;gap:8px;">
-                    <input
-                      type="text"
-                      id="ai-topic-input"
-                      class="form-input"
-                      placeholder="e.g. Australian Birds, Cloud Types, Trees"
-                      value="${esc(state.importTopicInput)}"
-                    />
-                    <button class="btn btn-primary" data-action="copy-ai-prompt" style="white-space:nowrap;">
-                      ${icon('clipboard', 'sm')} Copy
-                    </button>
-                  </div>
-                </div>
-
-                <div class="sheet-section">
-                  <div class="sheet-section-label">Prompt Preview</div>
-                  <textarea
-                    id="prompt-preview-box"
-                    class="form-textarea"
-                    readonly
-                    style="min-height:140px;color:var(--text-sub);"
-                  >${esc(promptPreview)}</textarea>
-                </div>
-
-                <div class="dock-row">
-                  <button class="btn btn-primary" data-action="switch-add-tab" data-tab="paste" style="width:100%;">
-                    Go to paste box ${icon('next', 'sm')}
-                  </button>
-                </div>
-              `
-          }
+          ${renderAddDeckTabBody(folderStats, promptPreview)}
         </div>
       </div>
     `;
   }
+
+  if (state.activeSheet === 'ai-settings') return renderAiSettingsSheet();
+  if (state.activeSheet === 'deck-cards') return renderDeckCardsSheet();
+  if (state.activeSheet === 'card-editor') return renderCardEditorSheet();
 
   // 4. DECK QUICK-CONTEXT SHEET (FROM HOME SCREEN `⋯` BUTTON)
   if (state.activeSheet === 'deck-context') {
@@ -1900,6 +2212,499 @@ function renderBottomSheet() {
   }
 
   return '';
+}
+
+function renderFolderPicker(folderStats, label = 'Save to folder (optional)') {
+  return `
+    <div class="sheet-section">
+      <div class="sheet-section-label">${label}</div>
+      <input
+        type="text"
+        id="import-folder-input"
+        class="form-input"
+        placeholder="e.g. Nature & Wildlife, Aviation, Exams..."
+        value="${esc(state.importFolderInput)}"
+      />
+      ${
+        folderStats.length > 0
+          ? `<div class="study-filter-strip" style="padding-top:2px;">
+              ${folderStats
+                .map(
+                  (f) => `
+                    <button
+                      type="button"
+                      class="filter-chip ${state.importFolderInput === f.name ? 'active' : ''}"
+                      data-action="pick-import-folder"
+                      data-folder="${esc(f.name)}"
+                    >
+                      <span>${esc(f.name)}</span>
+                    </button>
+                  `
+                )
+                .join('')}
+            </div>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderAiStatusText() {
+  if (!isAiConfigured(state.aiSettings)) return 'Connect Gemini, OpenRouter or a local model';
+  const conn = getActiveConnection(state.aiSettings);
+  return `${conn.label} · ${conn.model}`;
+}
+
+function renderAiSetupPrompt(returnSheet) {
+  return `
+    <div class="info-block" style="font-size:0.86rem;">
+      <div class="info-block-label">Connect an AI model</div>
+      Add your own API key for <strong>Gemini</strong> or <strong>OpenRouter</strong>, or point FieldGuide at any
+      <strong>OpenAI-compatible</strong> server (Ollama, LM Studio, OpenAI, Groq…). Your key stays on this device.
+    </div>
+    <button class="btn btn-primary" data-action="open-ai-settings" data-return="${returnSheet}" style="width:100%;">
+      ${icon('key', 'sm')} Set up AI connection
+    </button>
+  `;
+}
+
+function renderCountChips(action, current, values) {
+  return `
+    <div class="study-filter-strip">
+      ${values
+        .map(
+          (n) => `
+            <button type="button" class="filter-chip ${current === n ? 'active' : ''}" data-action="${action}" data-count="${n}">
+              <span>${n} cards</span>
+            </button>`
+        )
+        .join('')}
+    </div>
+  `;
+}
+
+function renderAddDeckTabBody(folderStats, promptPreview) {
+  if (state.addDeckTab === 'generate') {
+    if (!isAiConfigured(state.aiSettings)) return renderAiSetupPrompt('add-deck');
+    return `
+      <div class="sheet-section">
+        <div class="sheet-section-label">Topic</div>
+        <input
+          type="text"
+          id="ai-topic-input"
+          class="form-input"
+          placeholder="e.g. Australian Birds, Cloud Types, WWII Aircraft"
+          value="${esc(state.importTopicInput)}"
+          ${state.aiBusy ? 'disabled' : ''}
+        />
+      </div>
+
+      <div class="sheet-section">
+        <div class="sheet-section-label">How many cards</div>
+        ${renderCountChips('set-ai-count', state.aiGenerateCount, [10, 20, 30])}
+      </div>
+
+      ${renderFolderPicker(folderStats)}
+
+      <div class="ai-conn-line">
+        <span>${icon('sparkle', 'xs')} ${esc(renderAiStatusText())}</span>
+        <button class="hint-pill-btn" data-action="open-ai-settings" data-return="add-deck">Change</button>
+      </div>
+
+      <button class="btn btn-primary" data-action="generate-ai-deck" style="width:100%;" ${state.aiBusy ? 'disabled' : ''}>
+        ${state.aiBusy ? 'Generating… this can take a minute' : `${icon('sparkle', 'sm')} Generate deck`}
+      </button>
+    `;
+  }
+
+  if (state.addDeckTab === 'write') {
+    return `
+      <div class="info-block" style="font-size:0.86rem;">
+        <div class="info-block-label">Write your own</div>
+        Name your deck, then type in each card. Add a photo from your device, an image link, or let FieldGuide find one on Wikipedia.
+      </div>
+
+      <div class="sheet-section">
+        <div class="sheet-section-label">Deck name</div>
+        <div style="display:flex;gap:8px;">
+          <input
+            type="text"
+            id="manual-icon-input"
+            class="form-input"
+            style="width:64px;flex-shrink:0;text-align:center;"
+            placeholder="📚"
+            maxlength="4"
+            aria-label="Deck emoji"
+            value="${esc(state.manualDeckIcon)}"
+          />
+          <input
+            type="text"
+            id="manual-title-input"
+            class="form-input"
+            placeholder="e.g. Garden Weeds, Engine Parts, Spanish Verbs"
+            value="${esc(state.manualDeckTitle)}"
+          />
+        </div>
+      </div>
+
+      ${renderFolderPicker(folderStats)}
+
+      <button class="btn btn-primary" data-action="create-manual-deck" style="width:100%;">
+        ${icon('plus', 'sm')} Create deck &amp; add first card
+      </button>
+    `;
+  }
+
+  if (state.addDeckTab === 'prompt') {
+    return `<div class="info-block" style="font-size:0.8rem;">
+        <div class="info-block-label">3-Step AI Deck Builder</div>
+        1. Type any topic below &amp; tap <strong>Copy AI Prompt</strong>.<br/>
+        2. Paste into ChatGPT, Claude, or Gemini.<br/>
+        3. Copy the AI's reply and paste it in the <strong>Paste</strong> tab! (Wikipedia photos are resolved automatically.)
+      </div>
+
+      <div class="sheet-section">
+        <div class="sheet-section-label">Topic to Generate</div>
+        <div style="display:flex;gap:8px;">
+          <input
+            type="text"
+            id="ai-topic-input"
+            class="form-input"
+            placeholder="e.g. Australian Birds, Cloud Types, Trees"
+            value="${esc(state.importTopicInput)}"
+          />
+          <button class="btn btn-primary" data-action="copy-ai-prompt" style="white-space:nowrap;">
+            ${icon('clipboard', 'sm')} Copy
+          </button>
+        </div>
+      </div>
+
+      <div class="sheet-section">
+        <div class="sheet-section-label">Prompt Preview</div>
+        <textarea
+          id="prompt-preview-box"
+          class="form-textarea"
+          readonly
+          style="min-height:140px;color:var(--text-sub);"
+        >${esc(promptPreview)}</textarea>
+      </div>
+
+      <div class="dock-row">
+        <button class="btn btn-primary" data-action="switch-add-tab" data-tab="paste" style="width:100%;">
+          Go to paste box ${icon('next', 'sm')}
+        </button>
+      </div>`;
+  }
+
+  return `${renderFolderPicker(folderStats)}
+
+      <div class="sheet-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span class="sheet-section-label">Paste AI Reply or JSON</span>
+          <button class="hint-pill-btn" data-action="paste-clipboard">${icon('clipboard', 'xs')} Paste clipboard</button>
+        </div>
+        <textarea
+          id="json-paste-area"
+          class="form-textarea"
+          style="min-height:155px;"
+          placeholder="TITLE: Australian Birds&#10;CATEGORY: Nature &amp; Wildlife&#10;ICON: 🦜&#10;&#10;---&#10;NAME: Laughing Kookaburra&#10;SUBTITLE: Dacelo novaeguineae&#10;BADGE: Kingfisher&#10;FEATURES: Heavy bill, dark eye-stripe&#10;ABOUT: Famous for its laughing call.&#10;LINK: https://en.wikipedia.org/wiki/Laughing_kookaburra"
+        >${esc(state.importRawText)}</textarea>
+      </div>
+
+      <div class="sheet-section">
+        <div class="sheet-section-label">Or Upload a .txt / .json File</div>
+        <input type="file" id="json-file-input" accept=".txt,.json,text/plain,application/json" class="form-input" />
+      </div>
+
+      <div class="dock-row" style="margin-top:2px;">
+        <button class="btn btn-secondary" data-action="switch-add-tab" data-tab="prompt" style="flex:1;">
+          Get AI prompt
+        </button>
+        <button class="btn btn-primary" data-action="submit-import-json" style="flex:1.3;">
+          Create deck
+        </button>
+      </div>`;
+}
+
+function renderSheetFrame(title, body, { backAction = '' } = {}) {
+  return `
+    <div class="sheet-backdrop" data-action="close-sheet">
+      <div class="bottom-sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+          <span class="sheet-title" style="display:flex;align-items:center;gap:6px;min-width:0;">
+            ${backAction ? `<button class="sheet-close-btn" ${backAction} aria-label="Back">${icon('back', 'sm')}</button>` : ''}
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${title}</span>
+          </span>
+          <button class="sheet-close-btn" data-action="close-sheet" aria-label="Close">${icon('close', 'sm')}</button>
+        </div>
+        ${body}
+      </div>
+    </div>
+  `;
+}
+
+// --- AI CONNECTION SHEET ---
+function renderAiSettingsSheet() {
+  const draft = state.aiDraft || state.aiSettings;
+  const providerId = draft.provider;
+  const meta = AI_PROVIDERS[providerId];
+  const conn = draft.providers[providerId];
+  const busy = state.aiLoadingModels || state.aiTesting;
+
+  const body = `
+    <div class="sheet-section">
+      <div class="sheet-section-label">Provider</div>
+      <div class="mode-segmented" role="tablist">
+        ${Object.entries(AI_PROVIDERS)
+          .map(
+            ([id, p]) => `
+              <button class="mode-seg-btn ${providerId === id ? 'active' : ''}" data-action="set-ai-provider" data-provider="${id}">
+                <span>${id === 'custom' ? 'Custom / local' : p.label}</span>
+              </button>`
+          )
+          .join('')}
+      </div>
+    </div>
+
+    ${
+      providerId === 'custom'
+        ? `<div class="sheet-section">
+            <label class="sheet-section-label" for="ai-base-input">Server address (base URL)</label>
+            <input
+              type="url"
+              id="ai-base-input"
+              class="form-input"
+              placeholder="http://localhost:11434/v1"
+              value="${esc(conn.baseUrl)}"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+            />
+            <div class="form-hint">
+              Any server with an OpenAI-style <code>/chat/completions</code> endpoint. Examples:
+              Ollama <code>http://localhost:11434/v1</code>, LM Studio <code>http://localhost:1234/v1</code>,
+              OpenAI <code>https://api.openai.com/v1</code>. Local servers must allow this site via CORS
+              (e.g. <code>OLLAMA_ORIGINS=*</code>).
+            </div>
+          </div>`
+        : ''
+    }
+
+    <div class="sheet-section">
+      <label class="sheet-section-label" for="ai-key-input">API key${meta.needsKey ? '' : ' (optional)'}</label>
+      <input
+        type="password"
+        id="ai-key-input"
+        class="form-input"
+        placeholder="${meta.needsKey ? 'Paste your API key' : 'Leave blank if your server has no key'}"
+        value="${esc(conn.apiKey)}"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+      />
+      <div class="form-hint">${esc(meta.keyHint)}. Stored only on this device and sent directly to ${esc(meta.label)}.</div>
+    </div>
+
+    <div class="sheet-section">
+      <label class="sheet-section-label" for="ai-model-input">Model</label>
+      <div style="display:flex;gap:8px;">
+        <input
+          type="text"
+          id="ai-model-input"
+          class="form-input"
+          list="ai-model-list"
+          placeholder="${esc(meta.defaultModel || 'e.g. llama3.1, qwen2.5, gpt-4o-mini')}"
+          value="${esc(conn.model)}"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+        />
+        <button class="btn btn-secondary" data-action="load-ai-models" style="white-space:nowrap;" ${busy ? 'disabled' : ''}>
+          ${state.aiLoadingModels ? 'Loading…' : 'List models'}
+        </button>
+      </div>
+      <datalist id="ai-model-list">
+        ${state.aiModelOptions.map((m) => `<option value="${esc(m)}"></option>`).join('')}
+      </datalist>
+      ${
+        state.aiModelOptions.length
+          ? `<div class="form-hint">${state.aiModelOptions.length} models available — tap the box to pick one.</div>`
+          : ''
+      }
+    </div>
+
+    <div class="dock-row">
+      <button class="btn btn-secondary" data-action="test-ai-connection" style="flex:1;" ${busy ? 'disabled' : ''}>
+        ${state.aiTesting ? 'Testing…' : 'Test'}
+      </button>
+      <button class="btn btn-primary" data-action="save-ai-settings" style="flex:1.3;" ${busy ? 'disabled' : ''}>
+        Save
+      </button>
+    </div>
+  `;
+  return renderSheetFrame(
+    'AI connection',
+    body,
+    state.aiReturnSheet ? { backAction: `data-action="ai-settings-back"` } : {}
+  );
+}
+
+// --- CARDS IN A DECK (ADD / EDIT / DELETE / GENERATE MORE) ---
+function renderDeckCardsSheet() {
+  const deck = getDeckById(state.cardsDeckId);
+  if (!deck) return '';
+  const pendingDelete = state.confirmAction?.startsWith('delete-card:') ? state.confirmAction.slice(12) : null;
+
+  const aiSection = isAiConfigured(state.aiSettings)
+    ? `
+      <div class="sheet-section">
+        <div class="sheet-section-label">Generate more with AI</div>
+        ${renderCountChips('set-ai-more-count', state.aiMoreCount, [5, 10, 20])}
+        <div style="display:flex;gap:8px;">
+          <input
+            type="text"
+            id="ai-more-guidance"
+            class="form-input"
+            placeholder="Optional focus, e.g. 'only owls'"
+            value="${esc(state.aiMoreGuidance)}"
+            ${state.aiBusy ? 'disabled' : ''}
+          />
+          <button class="btn btn-primary" data-action="generate-more-cards" data-deck="${esc(deck.id)}" style="white-space:nowrap;" ${state.aiBusy ? 'disabled' : ''}>
+            ${state.aiBusy ? 'Working…' : `${icon('sparkle', 'sm')} Add`}
+          </button>
+        </div>
+      </div>`
+    : `
+      <div class="sheet-menu-list">
+        <button class="sheet-item" data-action="open-ai-settings" data-return="deck-cards">
+          <span class="sheet-item-label">${icon('sparkle', 'sm')} Connect an AI model to generate cards</span>
+          <span>${icon('next', 'sm')}</span>
+        </button>
+      </div>`;
+
+  const list = deck.cards.length
+    ? deck.cards
+        .map((card) => {
+          if (pendingDelete === card.id) {
+            return `
+              <div class="inline-confirm-box">
+                <div style="font-size:0.84rem;font-weight:650;color:var(--danger-text);">Delete "${esc(card.name)}"?</div>
+                <div class="dock-row">
+                  <button class="btn btn-secondary" data-action="cancel-confirm" style="flex:1;padding:9px;">Cancel</button>
+                  <button class="btn btn-danger" data-action="delete-card" data-deck="${esc(deck.id)}" data-card="${esc(card.id)}" style="flex:1;padding:9px;">Delete</button>
+                </div>
+              </div>`;
+          }
+          return `
+            <div class="card-row">
+              <img class="card-row-thumb" src="${esc(getBestCardImageSrc(card, deck.color))}" alt="" loading="lazy" />
+              <button class="card-row-text" data-action="edit-card" data-deck="${esc(deck.id)}" data-card="${esc(card.id)}">
+                <b>${esc(card.name)}</b>
+                <span>${esc(card.subtitle || card.badge || 'Tap to edit')}</span>
+              </button>
+              <button class="hint-pill-btn" data-action="edit-card" data-deck="${esc(deck.id)}" data-card="${esc(card.id)}" aria-label="Edit ${esc(card.name)}">
+                ${icon('pencil', 'xs')}
+              </button>
+              <button class="hint-pill-btn" style="color:var(--danger-text);" data-action="ask-confirm" data-confirm="delete-card:${esc(card.id)}" aria-label="Delete ${esc(card.name)}">
+                ${icon('trash', 'xs')}
+              </button>
+            </div>`;
+        })
+        .join('')
+    : `<div class="info-block" style="font-size:0.86rem;">No cards yet. Add your first one above.</div>`;
+
+  const body = `
+    <button class="btn btn-primary" data-action="new-card" data-deck="${esc(deck.id)}" style="width:100%;">
+      ${icon('plus', 'sm')} Write a new card
+    </button>
+
+    ${aiSection}
+
+    <div class="sheet-section">
+      <div class="sheet-section-label">Cards (${deck.cards.length})</div>
+      <div class="sheet-menu-list">${list}</div>
+    </div>
+
+    <button class="btn btn-secondary" data-action="close-sheet" style="width:100%;">Done</button>
+  `;
+  return renderSheetFrame(`${esc(deck.icon || '🃏')} ${esc(deck.title)}`, body);
+}
+
+// --- CARD EDITOR ---
+function renderCardEditorSheet() {
+  const deck = getDeckById(state.editorDeckId);
+  const d = state.editorDraft;
+  if (!deck || !d) return '';
+  const existing = state.editorCardId ? deck.cards.find((c) => c.id === state.editorCardId) : null;
+  const previewSrc =
+    state.editorPhotoPreview ||
+    (existing && !state.editorRemovePhoto ? getBestCardImageSrc(existing, deck.color) : null) ||
+    (isHttpUrl(d.imageUrl) ? d.imageUrl : null);
+
+  const field = (id, label, value, placeholder, { textarea = false, type = 'text' } = {}) => `
+    <div class="sheet-section">
+      <label class="sheet-section-label" for="${id}">${label}</label>
+      ${
+        textarea
+          ? `<textarea id="${id}" class="form-textarea form-textarea-plain" placeholder="${esc(placeholder)}">${esc(value)}</textarea>`
+          : `<input type="${type}" id="${id}" class="form-input" placeholder="${esc(placeholder)}" value="${esc(value)}" />`
+      }
+    </div>`;
+
+  const body = `
+    <div class="sheet-section">
+      <div class="sheet-section-label">Photo</div>
+      <div class="card-photo-row">
+        ${
+          previewSrc
+            ? `<img class="card-photo-preview" src="${esc(previewSrc)}" alt="Card photo preview" />`
+            : `<div class="card-photo-preview empty">${icon('image')}</div>`
+        }
+        <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;">
+          <label class="btn btn-secondary card-photo-pick">
+            ${icon('image', 'sm')} ${previewSrc ? 'Change photo' : 'Choose photo'}
+            <input type="file" id="card-photo-input" accept="image/*" hidden />
+          </label>
+          ${
+            state.editorPhotoBlob || (state.editorHasLocalPhoto && !state.editorRemovePhoto)
+              ? `<button class="hint-pill-btn" data-action="remove-card-photo" style="align-self:flex-start;">${icon('trash', 'xs')} Remove photo</button>`
+              : ''
+          }
+        </div>
+      </div>
+      <input
+        type="url"
+        id="card-image-url-input"
+        class="form-input"
+        placeholder="…or paste an image link (https://…)"
+        value="${esc(d.imageUrl)}"
+      />
+      <label class="form-check">
+        <input type="checkbox" id="card-auto-image" ${d.autoImage ? 'checked' : ''} />
+        <span>If there's no photo, find one on Wikipedia</span>
+      </label>
+    </div>
+
+    ${field('card-name-input', 'Name *', d.name, 'e.g. Laughing Kookaburra')}
+    ${field('card-subtitle-input', 'Subtitle', d.subtitle, 'Scientific name, model, translation…')}
+    ${field('card-badge-input', 'Group tag', d.badge, 'e.g. Kingfisher, Fighter, Verb')}
+    ${field('card-features-input', 'Look for (key features)', d.keyFeatures, 'The clues that identify it', { textarea: true })}
+    ${field('card-about-input', 'About', d.description, 'Background notes', { textarea: true })}
+    ${field('card-link-input', 'Link', d.sourceUrl, 'https://en.wikipedia.org/wiki/…', { type: 'url' })}
+
+    <div class="dock-row">
+      ${
+        existing
+          ? `<button class="btn btn-secondary" data-action="open-deck-cards" data-deck="${esc(deck.id)}" style="flex:1;">Cancel</button>`
+          : `<button class="btn btn-secondary" data-action="save-card" data-another="true" style="flex:1;">Save &amp; add another</button>`
+      }
+      <button class="btn btn-primary" data-action="save-card" style="flex:1.2;">${existing ? 'Save changes' : 'Save card'}</button>
+    </div>
+  `;
+  return renderSheetFrame(existing ? 'Edit card' : `New card · ${esc(deck.title)}`, body, {
+    backAction: `data-action="open-deck-cards" data-deck="${esc(deck.id)}"`
+  });
 }
 
 function renderDeckManagementSheetContent(deck, includeModeSettings) {
@@ -1935,6 +2740,16 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
                 </div>
               </div>
               ${renderModeSpecificSettingsSection(counts)}`
+            : !deck.cards.length
+            ? `
+              <div class="info-block" style="font-size:0.88rem;">
+                <div class="info-block-label">No cards yet</div>
+                Add a few cards to start studying this deck.
+              </div>
+              <button class="btn btn-primary" data-action="new-card" data-deck="${esc(deck.id)}" style="width:100%;">
+                ${icon('plus', 'sm')} Write the first card
+              </button>
+            `
             : `
               <div class="mode-launch">
                 ${[
@@ -1953,6 +2768,16 @@ function renderDeckManagementSheetContent(deck, includeModeSettings) {
               </div>
             `
         }
+
+        <div class="sheet-section">
+          <div class="sheet-section-label">Cards</div>
+          <div class="sheet-menu-list">
+            <button class="sheet-item" data-action="open-deck-cards" data-deck="${esc(deck.id)}">
+              <span class="sheet-item-label">${icon('pencil', 'sm')} Add, edit or generate cards (${deck.cards.length})</span>
+              <span>${icon('next', 'sm')}</span>
+            </button>
+          </div>
+        </div>
 
         <div class="sheet-section">
           <div class="sheet-section-label">Folder</div>
@@ -2366,7 +3191,7 @@ function attachEvents() {
           imgEl.src = wikiUrl;
           return;
         }
-        imgEl.src = createFallbackSvgDataUrl(card, deck?.color);
+        imgEl.src = createFallbackSvgDataUrl(card, deck?.color, { mystery: imgEl.dataset.mystery === 'true' });
       }
     };
   });
@@ -2413,6 +3238,68 @@ function attachEvents() {
       if (previewBox) {
         previewBox.value = AI_DECK_PROMPT_TEMPLATE(state.importTopicInput);
       }
+    };
+  }
+
+  const manualTitleInput = document.getElementById('manual-title-input');
+  if (manualTitleInput) {
+    manualTitleInput.oninput = (e) => {
+      state.manualDeckTitle = e.target.value;
+    };
+  }
+  const manualIconInput = document.getElementById('manual-icon-input');
+  if (manualIconInput) {
+    manualIconInput.oninput = (e) => {
+      state.manualDeckIcon = e.target.value;
+    };
+  }
+  const moreGuidanceInput = document.getElementById('ai-more-guidance');
+  if (moreGuidanceInput) {
+    moreGuidanceInput.oninput = (e) => {
+      state.aiMoreGuidance = e.target.value;
+    };
+  }
+
+  // Card editor & AI connection fields write straight into their drafts so re-renders keep them
+  if (state.activeSheet === 'card-editor') {
+    for (const id of [
+      'card-name-input',
+      'card-subtitle-input',
+      'card-badge-input',
+      'card-features-input',
+      'card-about-input',
+      'card-link-input',
+      'card-image-url-input',
+      'card-auto-image'
+    ]) {
+      const el = document.getElementById(id);
+      if (el) el.oninput = el.onchange = () => readEditorInputs();
+    }
+  }
+  if (state.activeSheet === 'ai-settings' && state.aiDraft) {
+    for (const id of ['ai-key-input', 'ai-model-input', 'ai-base-input']) {
+      const el = document.getElementById(id);
+      if (el) el.oninput = () => readAiDraftInputs();
+    }
+  }
+
+  // Photo picked from the device in the card editor
+  const cardPhotoInput = document.getElementById('card-photo-input');
+  if (cardPhotoInput) {
+    cardPhotoInput.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        showToast('Pick an image file.');
+        return;
+      }
+      readEditorInputs();
+      const blob = await downscalePhoto(file);
+      clearEditorPhoto();
+      state.editorPhotoBlob = blob;
+      state.editorPhotoPreview = URL.createObjectURL(blob);
+      state.editorRemovePhoto = false;
+      render();
     };
   }
 
@@ -2490,7 +3377,8 @@ function attachEvents() {
           break;
 
         case 'open-add-deck':
-          state.addDeckTab = el.dataset.tab || 'paste';
+          state.addDeckTab =
+            el.dataset.tab === 'auto' ? (isAiConfigured(state.aiSettings) ? 'generate' : 'paste') : el.dataset.tab || 'paste';
           state.confirmAction = null;
           if (!state.importFolderInput && state.homeFolderFilter !== 'all') {
             state.importFolderInput = state.homeFolderFilter;
@@ -2816,6 +3704,90 @@ function attachEvents() {
           }
           break;
         }
+
+        // AI connection & generation
+        case 'open-ai-settings':
+          openAiSettings(el.dataset.return || null);
+          break;
+
+        case 'ai-settings-back':
+          state.activeSheet = state.aiReturnSheet;
+          state.aiReturnSheet = null;
+          render();
+          break;
+
+        case 'set-ai-provider':
+          readAiDraftInputs();
+          state.aiDraft.provider = el.dataset.provider;
+          state.aiModelOptions = [];
+          render();
+          break;
+
+        case 'load-ai-models':
+          loadAiModels();
+          break;
+
+        case 'test-ai-connection':
+          runAiConnectionTest();
+          break;
+
+        case 'save-ai-settings':
+          saveAiDraft();
+          break;
+
+        case 'set-ai-count':
+          state.aiGenerateCount = Number(el.dataset.count) || 10;
+          render();
+          break;
+
+        case 'set-ai-more-count':
+          state.aiMoreCount = Number(el.dataset.count) || 10;
+          render();
+          break;
+
+        case 'generate-ai-deck':
+          generateDeckWithAi();
+          break;
+
+        case 'generate-more-cards':
+          generateMoreCardsWithAi(el.dataset.deck);
+          break;
+
+        // Write your own decks & cards
+        case 'create-manual-deck':
+          createManualDeck();
+          break;
+
+        case 'open-deck-cards':
+          clearEditorPhoto();
+          state.editorDraft = null;
+          openDeckCards(el.dataset.deck);
+          break;
+
+        case 'new-card':
+          state.cardsDeckId = el.dataset.deck;
+          openCardEditor(el.dataset.deck, null);
+          break;
+
+        case 'edit-card':
+          state.cardsDeckId = el.dataset.deck;
+          openCardEditor(el.dataset.deck, el.dataset.card);
+          break;
+
+        case 'save-card':
+          saveEditorCard(el.dataset.another === 'true');
+          break;
+
+        case 'remove-card-photo':
+          readEditorInputs();
+          clearEditorPhoto();
+          state.editorRemovePhoto = true;
+          render();
+          break;
+
+        case 'delete-card':
+          await deleteCardFromDeck(el.dataset.deck, el.dataset.card);
+          break;
 
         case 'submit-import-json': {
           const pasteEl = document.getElementById('json-paste-area');

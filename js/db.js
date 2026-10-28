@@ -52,16 +52,35 @@ export async function initDecksIfEmpty() {
     } else {
       await saveDeck({
         ...starter,
-        category: prev.category || starter.category
+        category: prev.category || starter.category,
+        cards: mergeStarterCards(starter, prev),
+        removedCardIds: prev.removedCardIds || []
       });
     }
   }
   return getAllDecks();
 }
 
+// Keeps cards the user wrote or edited (and hides ones they deleted) when starter decks refresh.
+function mergeStarterCards(starter, prev) {
+  const removed = new Set(prev.removedCardIds || []);
+  const userCards = (prev.cards || []).filter((c) => c.userAdded);
+  const userById = new Map(userCards.map((c) => [c.id, c]));
+  const starterIds = new Set(starter.cards.map((c) => c.id));
+  return [
+    ...starter.cards.filter((c) => !removed.has(c.id)).map((c) => userById.get(c.id) || c),
+    ...userCards.filter((c) => !starterIds.has(c.id))
+  ];
+}
+
+// Restores the built-in cards (undoing edits and deletions) but keeps cards the user added.
 export async function resetStarterDecks() {
+  const existingById = new Map((await getAllDecks()).map((d) => [d.id, d]));
   for (const deck of STARTER_DECKS) {
-    await saveDeck(deck);
+    const prev = existingById.get(deck.id);
+    const starterIds = new Set(deck.cards.map((c) => c.id));
+    const extraCards = (prev?.cards || []).filter((c) => c.userAdded && !starterIds.has(c.id));
+    await saveDeck({ ...deck, cards: [...deck.cards, ...extraCards], removedCardIds: [] });
   }
   return getAllDecks();
 }
@@ -246,6 +265,31 @@ export async function saveCachedImage(cardId, deckId, blob, resolvedUrl) {
   });
 }
 
+/** Stores a photo the user picked from their device as the card's image. */
+export async function setLocalCardImage(cardId, deckId, blob) {
+  await saveCachedImage(cardId, deckId, blob, 'local');
+  const prevUrl = memoryObjectUrls.get(cardId);
+  if (prevUrl) URL.revokeObjectURL(prevUrl);
+  memoryObjectUrls.set(cardId, URL.createObjectURL(blob));
+}
+
+/** Removes a card's saved photo and study progress (used when a card is deleted or its image changes). */
+export async function deleteCardData(cardId, { keepProgress = false } = {}) {
+  const db = await openDB();
+  const stores = keepProgress ? ['images'] : ['images', 'progress'];
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(stores, 'readwrite');
+    for (const name of stores) tx.objectStore(name).delete(cardId);
+    tx.oncomplete = () => {
+      const prevUrl = memoryObjectUrls.get(cardId);
+      if (prevUrl) URL.revokeObjectURL(prevUrl);
+      memoryObjectUrls.delete(cardId);
+      resolve();
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 function extractWikiTitle(card) {
   if (card.sourceUrl && card.sourceUrl.includes('wikipedia.org/wiki/')) {
     const parts = card.sourceUrl.split('/wiki/');
@@ -261,7 +305,7 @@ function extractWikiTitle(card) {
  * so Wikimedia never rate-limits the client!
  */
 export async function resolveDeckWikipediaImages(deck) {
-  const cardsToResolve = (deck.cards || []).filter((c) => !c.imageUrl);
+  const cardsToResolve = (deck.cards || []).filter((c) => !c.imageUrl && !c.noAutoImage);
   if (cardsToResolve.length === 0) return deck;
 
   const titleToCards = new Map();
@@ -326,6 +370,7 @@ export async function resolveDeckWikipediaImages(deck) {
  * Fallback single-card Wikipedia image lookup if an <img> fails to load
  */
 export async function resolveSingleCardWikiImage(card, deck) {
+  if (card.noAutoImage) return null;
   const title = extractWikiTitle(card) || card.name || card.subtitle;
   if (!title) return null;
   try {
@@ -344,10 +389,11 @@ export async function resolveSingleCardWikiImage(card, deck) {
   return null;
 }
 
-export function createFallbackSvgDataUrl(card, deckColor = '#6366f1') {
-  const title = (card.name || 'Card').replace(/[<>&"']/g, '');
-  const sub = (card.subtitle || '').replace(/[<>&"']/g, '');
-  const badge = (card.badge || '').replace(/[<>&"']/g, '');
+// `mystery` hides the name so a photo-less card doesn't give away a quiz or recall answer.
+export function createFallbackSvgDataUrl(card, deckColor = '#6366f1', { mystery = false } = {}) {
+  const title = mystery ? '?' : (card.name || 'Card').replace(/[<>&"']/g, '');
+  const sub = mystery ? 'No photo for this card' : (card.subtitle || '').replace(/[<>&"']/g, '');
+  const badge = mystery ? '' : (card.badge || '').replace(/[<>&"']/g, '');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="520" viewBox="0 0 800 520">
     <defs>
       <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
@@ -365,14 +411,14 @@ export function createFallbackSvgDataUrl(card, deckColor = '#6366f1') {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-export function getBestCardImageSrc(card, deckColor = '#6366f1') {
+export function getBestCardImageSrc(card, deckColor = '#6366f1', options = {}) {
   if (memoryObjectUrls.has(card.id)) {
     return memoryObjectUrls.get(card.id);
   }
   if (card.imageUrl) {
     return card.imageUrl;
   }
-  return createFallbackSvgDataUrl(card, deckColor);
+  return createFallbackSvgDataUrl(card, deckColor, options);
 }
 
 /**

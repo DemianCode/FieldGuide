@@ -24,6 +24,22 @@ Plus a sample custom import deck in [`data/sample-deck-butterflies.json`](./data
 - Every deck has a **📥 Save Images Offline** button that downloads the actual image blobs and stores them in **IndexedDB** on your device so they work 100% offline.
 - **Resilient to AI URL hallucinations**: When you ask an AI to build a JSON deck, you don't even have to worry if the AI omits `imageUrl` or provides a broken image URL—as long as `name` or `sourceUrl` (Wikipedia link) is present, the app automatically queries the official Wikipedia REST API, fetches the lead photo, and saves it locally to IndexedDB!
 
+## Generate Cards In-App With Your Own AI Key
+Home menu → **AI connection** lets you plug in your own model. Then tap **New deck → AI**, type a topic, pick 10/20/30 cards and the deck is generated, photo-matched from Wikipedia and saved. From any deck's sheet → **Add, edit or generate cards** you can ask the AI for 5/10/20 *more* cards (with an optional focus); it is told which cards already exist so it doesn't repeat them.
+
+Supported connections:
+- **Gemini**: a free key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Default model `gemini-2.5-flash`.
+- **OpenRouter**: a key from [openrouter.ai/keys](https://openrouter.ai/keys). Default model `openrouter/auto`; any OpenRouter model id works.
+- **Custom / local (OpenAI-compatible)**: any server with an OpenAI-style `/chat/completions` endpoint, such as Ollama (`http://localhost:11434/v1`), LM Studio (`http://localhost:1234/v1`), llama.cpp, OpenAI, Groq or Mistral. The key is optional. Local servers must allow the app's origin via CORS (for Ollama, start it with `OLLAMA_ORIGINS=*`).
+
+**List models** fills the model picker from the provider, and **Test** sends a one-word request. Keys are stored only in this browser's `localStorage` and are sent straight to the provider you pick; FieldGuide has no server of its own.
+
+## Write Your Own Cards
+- **New deck → Write**: name a deck (plus an optional emoji and folder), then type cards in one after another (**Save & add another**).
+- **Add, edit or generate cards** on any deck, including the built-in starter decks, adds, edits or deletes individual cards.
+- Each card has a name, subtitle, group tag, key features, notes and a link. For the photo, either pick one from your device (it's resized and stored offline in IndexedDB), paste an image link, or let the app find one on Wikipedia.
+- Cards you add to starter decks are kept when the app updates. **Restore built-in starter decks** undoes your edits and deletions to the built-in cards but keeps the cards you added.
+
 ## AI Deck JSON Schema
 Tap **＋ AI / JSON Deck** in the top header to either:
 1. Copy a ready-made prompt for ChatGPT, Claude, or Gemini for any topic you type, or
