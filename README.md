@@ -10,8 +10,10 @@ A sleek, mobile-first Progressive Web App (PWA) for Android and desktop designed
 ## Deck Library (regional species and flags)
 Home menu (or the download icon beside **Decks**) → **Deck library** lists large ready-made decks that are fetched on demand, so the app itself stays small. Each is added to your device and works offline once its photos are saved.
 
-- **Greater Melbourne, Australia**: native and introduced birds, trees, shrubs & climbers, wildflowers & herbs, and grasses/ferns. Only species with regular recent sightings within about 45 km of the CBD are included.
-- **Flags**: every national flag, historical flags, Australian, US and Canadian state/province flags, and regional flags from around the world.
+- **Greater Melbourne, Australia**: native and introduced birds (218), trees, shrubs & climbers, native wildflowers, introduced weeds & garden escapes, and grasses/ferns (1,316 cards in all). Only species with regular recent sightings within about 45 km of the CBD are included.
+- **Flags** (1,431 cards): all 197 national flags, 203 notable historical flags, Australian, US and Canadian state/province flags, and 954 regional flags from 112 countries.
+
+Flag images are hot-linked from Wikimedia Commons thumbnails; if Wikimedia is throttling your connection a flag may briefly show a placeholder, so use **Save photos offline** on a deck while you have a good connection.
 
 Every library card carries its photo credit and licence (and a Wikipedia text credit where text is used). Photos are limited to CC0, CC BY and CC BY-SA so the app can be published with attribution.
 
