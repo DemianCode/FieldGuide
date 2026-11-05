@@ -50,7 +50,7 @@ def get_json(url, params=None, headers=None, gap=0.7, tries=6):
                 delay = min(delay * 2, 60)
                 continue
             raise
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError, ValueError):
             if attempt < tries - 1:
                 time.sleep(delay)
                 delay = min(delay * 2, 60)

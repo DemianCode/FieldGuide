@@ -193,8 +193,8 @@ def build(outdir):
     print("Subnational...")
     ids = [val(b, "item").rsplit("/", 1)[1] for b in sparql(Q_SUBNATIONAL_IDS)]
     rows = []
-    for i in range(0, len(ids), 500):
-        rows += sparql(Q_SUBNATIONAL_DETAIL % " ".join("wd:" + q for q in ids[i:i + 500]))
+    for i in range(0, len(ids), 120):
+        rows += sparql(Q_SUBNATIONAL_DETAIL % " ".join("wd:" + q for q in ids[i:i + 120]))
     subnational = collect(rows)
     print(len(national), len(historical), len(subnational))
 
