@@ -65,7 +65,7 @@ SELECT ?item ?label ?flag ?sl ?countryLabel WHERE {
 
 
 def sparql(query):
-    r = get_json(SPARQL, {"query": PREFIX + query, "format": "json"}, gap=62)
+    r = get_json(SPARQL, {"query": PREFIX + query, "format": "json"}, gap=62, tries=15)
     return r["results"]["bindings"]
 
 

@@ -1,0 +1,81 @@
+{
+ "packs": [
+  {
+   "id": "deck-mel-birds-native",
+   "title": "Melbourne Birds: Native",
+   "icon": "🦜",
+   "color": "#0ea5e9",
+   "category": "Nature & Wildlife",
+   "description": "Native birds regularly seen around Greater Melbourne, from backyards to wetlands.",
+   "region": "Greater Melbourne, Australia",
+   "count": 201,
+   "file": "deck-mel-birds-native.json"
+  },
+  {
+   "id": "deck-mel-birds-introduced",
+   "title": "Melbourne Birds: Introduced",
+   "icon": "🐦",
+   "color": "#f97316",
+   "category": "Nature & Wildlife",
+   "description": "Introduced and feral birds you will meet around Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 17,
+   "file": "deck-mel-birds-introduced.json"
+  },
+  {
+   "id": "deck-mel-trees",
+   "title": "Melbourne Trees",
+   "icon": "🌳",
+   "color": "#16a34a",
+   "category": "Nature & Wildlife",
+   "description": "Native and introduced trees of Greater Melbourne's bush, parks and streets.",
+   "region": "Greater Melbourne, Australia",
+   "count": 170,
+   "file": "deck-mel-trees.json"
+  },
+  {
+   "id": "deck-mel-shrubs",
+   "title": "Melbourne Shrubs & Climbers",
+   "icon": "🌿",
+   "color": "#65a30d",
+   "category": "Nature & Wildlife",
+   "description": "Shrubs, climbers and scramblers seen across Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 164,
+   "file": "deck-mel-shrubs.json"
+  },
+  {
+   "id": "deck-mel-wildflowers",
+   "title": "Melbourne Wildflowers & Herbs",
+   "icon": "🌼",
+   "color": "#eab308",
+   "category": "Nature & Wildlife",
+   "description": "Native wildflowers, orchids, daisies and other herbs of Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 332,
+   "file": "deck-mel-wildflowers.json"
+  },
+  {
+   "id": "deck-mel-weeds",
+   "title": "Melbourne Weeds & Garden Escapes",
+   "icon": "🌱",
+   "color": "#dc2626",
+   "category": "Nature & Wildlife",
+   "description": "Introduced herbs, weeds and garden escapes you will meet around Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 252,
+   "file": "deck-mel-weeds.json"
+  },
+  {
+   "id": "deck-mel-grasses-ferns",
+   "title": "Melbourne Grasses, Ferns & More",
+   "icon": "🌾",
+   "color": "#14b8a6",
+   "category": "Nature & Wildlife",
+   "description": "Grasses, sedges, rushes, ferns and other plants of Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 180,
+   "file": "deck-mel-grasses-ferns.json"
+  }
+ ]
+}
