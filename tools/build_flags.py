@@ -152,7 +152,7 @@ def card(prefix, it, badge, subtitle, features, info):
         "imageLicense": meta["license"],
         "imageSource": meta["page"],
         "sourceUrl": "https://www.wikidata.org/wiki/" + it["q"],
-        "sitelinks": it["sl"],
+        "_sl": it["sl"],
     }
 
 
@@ -165,8 +165,14 @@ def pack(did, title, icon, color, desc, cards):
     }
 
 
+def _y(n):
+    return f"{-n} BC" if n < 0 else str(n)
+
+
 def fmt_years(it):
     s, e = it["start"], it["end"]
+    s = _y(s) if s is not None else None
+    e = _y(e) if e is not None else None
     if s and e:
         return f"{s}–{e}"
     if e:
@@ -174,6 +180,14 @@ def fmt_years(it):
     if s:
         return f"from {s}"
     return ""
+
+
+MIN_HISTORICAL_SITELINKS = 50   # notable former states only
+REGION_MIN_SITELINKS = 30
+REGION_MAX_PER_COUNTRY = 16     # keep the best-known regions of each country
+# Countries whose ISO 3166-2 codes are mostly municipalities rather than regions
+REGION_SKIP_COUNTRIES = {"Malta", "North Macedonia", "Estonia", "Latvia", "Lithuania", "Moldova"}
+US_SKIP = {"Johnston Atoll", "Wake Island", "United States Minor Outlying Islands"}
 
 
 def build(outdir):
@@ -212,7 +226,7 @@ def build(outdir):
                       "The national flags of every sovereign state.", nat))
 
     hist = []
-    for it in sorted(historical, key=lambda i: -i["sl"]):
+    for it in sorted((i for i in historical if i["sl"] >= MIN_HISTORICAL_SITELINKS), key=lambda i: -i["sl"]):
         yrs = fmt_years(it)
         c = card("flag-hist", it, "Historical", yrs and f"Historical flag, {yrs}" or "Historical flag", "", info)
         if c:
@@ -232,15 +246,18 @@ def build(outdir):
     for country, items in sorted(by_country.items()):
         if country in special:
             did, title, icon, color = special[country]
+            if country == "United States":
+                items = [i for i in items if i["name"] not in US_SKIP]
             cards = [c for c in (card("flag-sub", i, country, f"Flag of {i['name']}", "", info)
                                  for i in sorted(items, key=lambda i: i["name"])) if c]
             decks.append(pack(did, title, icon, color, f"Flags of {country}'s states, provinces and territories.", cards))
-        else:
-            for i in items:
+        elif country not in REGION_SKIP_COUNTRIES:
+            items = sorted((i for i in items if i["sl"] >= REGION_MIN_SITELINKS), key=lambda i: -i["sl"])
+            for i in items[:REGION_MAX_PER_COUNTRY]:
                 c = card("flag-sub", i, country, f"Region of {country}", "", info)
                 if c:
                     rest.append(c)
-    rest.sort(key=lambda c: -c["sitelinks"])
+    rest.sort(key=lambda c: (c["badge"], -c["_sl"]))
     decks.append(pack("deck-flags-regions", "World Regional Flags", "🗺️", "#7c3aed",
                       "Flags of states, provinces, prefectures and other first-level regions around the world.", rest))
 
@@ -248,6 +265,8 @@ def build(outdir):
     for d in decks:
         if not d["cards"]:
             continue
+        for c in d["cards"]:
+            c.pop("_sl", None)
         with open(os.path.join(outdir, d["id"] + ".json"), "w", encoding="utf-8") as f:
             json.dump(d, f, ensure_ascii=False, indent=1)
         index.append({k: d[k] for k in ("id", "title", "icon", "color", "category", "description")}
