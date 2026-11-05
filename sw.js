@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fieldguide-pwa-v9';
+const CACHE_NAME = 'fieldguide-pwa-v10';
 const APP_SHELL = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const APP_SHELL = [
   './js/app.js',
   './js/db.js',
   './js/ai.js',
+  './js/library.js',
   './data/starter-decks.js'
 ];
 
