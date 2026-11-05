@@ -1,5 +1,6 @@
 """Tiny cached HTTP helper shared by the deck builders (standard library only)."""
 import hashlib
+import http.client
 import json
 import os
 import time
@@ -50,7 +51,7 @@ def get_json(url, params=None, headers=None, gap=0.7, tries=6):
                 delay = min(delay * 2, 60)
                 continue
             raise
-        except (urllib.error.URLError, TimeoutError, ValueError):
+        except (OSError, http.client.HTTPException, ValueError):
             if attempt < tries - 1:
                 time.sleep(delay)
                 delay = min(delay * 2, 60)

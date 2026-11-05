@@ -1,0 +1,147 @@
+{
+ "packs": [
+  {
+   "id": "deck-mel-birds-native",
+   "title": "Melbourne Birds: Native",
+   "icon": "🦜",
+   "color": "#0ea5e9",
+   "category": "Nature & Wildlife",
+   "description": "Native birds regularly seen around Greater Melbourne, from backyards to wetlands.",
+   "region": "Greater Melbourne, Australia",
+   "count": 201,
+   "file": "deck-mel-birds-native.json"
+  },
+  {
+   "id": "deck-mel-birds-introduced",
+   "title": "Melbourne Birds: Introduced",
+   "icon": "🐦",
+   "color": "#f97316",
+   "category": "Nature & Wildlife",
+   "description": "Introduced and feral birds you will meet around Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 17,
+   "file": "deck-mel-birds-introduced.json"
+  },
+  {
+   "id": "deck-mel-trees",
+   "title": "Melbourne Trees",
+   "icon": "🌳",
+   "color": "#16a34a",
+   "category": "Nature & Wildlife",
+   "description": "Native and introduced trees of Greater Melbourne's bush, parks and streets.",
+   "region": "Greater Melbourne, Australia",
+   "count": 170,
+   "file": "deck-mel-trees.json"
+  },
+  {
+   "id": "deck-mel-shrubs",
+   "title": "Melbourne Shrubs & Climbers",
+   "icon": "🌿",
+   "color": "#65a30d",
+   "category": "Nature & Wildlife",
+   "description": "Shrubs, climbers and scramblers seen across Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 164,
+   "file": "deck-mel-shrubs.json"
+  },
+  {
+   "id": "deck-mel-wildflowers",
+   "title": "Melbourne Wildflowers & Herbs",
+   "icon": "🌼",
+   "color": "#eab308",
+   "category": "Nature & Wildlife",
+   "description": "Native wildflowers, orchids, daisies and other herbs of Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 332,
+   "file": "deck-mel-wildflowers.json"
+  },
+  {
+   "id": "deck-mel-weeds",
+   "title": "Melbourne Weeds & Garden Escapes",
+   "icon": "🌱",
+   "color": "#dc2626",
+   "category": "Nature & Wildlife",
+   "description": "Introduced herbs, weeds and garden escapes you will meet around Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 252,
+   "file": "deck-mel-weeds.json"
+  },
+  {
+   "id": "deck-mel-grasses-ferns",
+   "title": "Melbourne Grasses, Ferns & More",
+   "icon": "🌾",
+   "color": "#14b8a6",
+   "category": "Nature & Wildlife",
+   "description": "Grasses, sedges, rushes, ferns and other plants of Greater Melbourne.",
+   "region": "Greater Melbourne, Australia",
+   "count": 180,
+   "file": "deck-mel-grasses-ferns.json"
+  },
+  {
+   "id": "deck-flags-national",
+   "title": "Flags of the World",
+   "icon": "🏳️",
+   "color": "#2563eb",
+   "category": "Flags",
+   "description": "The national flags of every sovereign state.",
+   "region": "",
+   "count": 197,
+   "file": "deck-flags-national.json"
+  },
+  {
+   "id": "deck-flags-historical",
+   "title": "Historical Flags",
+   "icon": "🏴",
+   "color": "#78350f",
+   "category": "Flags",
+   "description": "Flags of states, empires and unions that no longer exist.",
+   "region": "",
+   "count": 203,
+   "file": "deck-flags-historical.json"
+  },
+  {
+   "id": "deck-flags-australia",
+   "title": "Australian State & Territory Flags",
+   "icon": "🇦🇺",
+   "color": "#0f766e",
+   "category": "Flags",
+   "description": "Flags of Australia's states, provinces and territories.",
+   "region": "",
+   "count": 8,
+   "file": "deck-flags-australia.json"
+  },
+  {
+   "id": "deck-flags-us",
+   "title": "US State Flags",
+   "icon": "🇺🇸",
+   "color": "#1d4ed8",
+   "category": "Flags",
+   "description": "Flags of United States's states, provinces and territories.",
+   "region": "",
+   "count": 56,
+   "file": "deck-flags-us.json"
+  },
+  {
+   "id": "deck-flags-canada",
+   "title": "Canadian Province & Territory Flags",
+   "icon": "🇨🇦",
+   "color": "#dc2626",
+   "category": "Flags",
+   "description": "Flags of Canada's states, provinces and territories.",
+   "region": "",
+   "count": 13,
+   "file": "deck-flags-canada.json"
+  },
+  {
+   "id": "deck-flags-regions",
+   "title": "World Regional Flags",
+   "icon": "🗺️",
+   "color": "#7c3aed",
+   "category": "Flags",
+   "description": "Flags of states, provinces, prefectures and other first-level regions around the world.",
+   "region": "",
+   "count": 954,
+   "file": "deck-flags-regions.json"
+  }
+ ]
+}

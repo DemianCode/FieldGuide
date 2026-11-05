@@ -28,8 +28,8 @@ AUSTRALIA_PLACE = 6744  # iNaturalist place used for native / introduced flags
 OK_LICENSES = {"cc0", "cc-by", "cc-by-sa"}
 LICENSE_NAMES = {"cc0": "CC0", "cc-by": "CC BY", "cc-by-sa": "CC BY-SA"}
 
-MIN_BIRD_OBS = 15       # "regulars": at least this many research-grade records nearby
-MIN_PLANT_OBS = 20      # wild plants
+MIN_BIRD_OBS = 30       # "regulars": at least this many research-grade records nearby
+MIN_PLANT_OBS = 30      # wild plants
 MIN_PLANTED_TREE_OBS = 40  # street / park trees that are mostly recorded as cultivated
 
 
@@ -186,10 +186,20 @@ def status_of(taxon):
     return None
 
 
+SMALL_WORDS = {"of", "and", "the", "in", "on", "with"}
+
+
+def title_case(name):
+    """iNaturalist common names are inconsistently cased; normalise to Title Case."""
+    words = name.strip().split()
+    return " ".join(w if (i and w.lower() in SMALL_WORDS) else w[:1].upper() + w[1:] for i, w in enumerate(words))
+
+
 def make_card(prefix, count, taxon, wiki_cache):
     common = taxon.get("preferred_common_name")
     if not common:
         return None
+    common = title_case(common)
     photo = pick_photo(taxon)
     if not photo:
         return None
@@ -288,7 +298,11 @@ def build(outdir):
         ("deck-mel-shrubs", "Melbourne Shrubs & Climbers", "Nature & Wildlife", "🌿", "#65a30d",
          "Shrubs, climbers and scramblers seen across Greater Melbourne.", groups["shrub"]),
         ("deck-mel-wildflowers", "Melbourne Wildflowers & Herbs", "Nature & Wildlife", "🌼", "#eab308",
-         "Wildflowers, orchids, daisies and other herbs, native and weedy, around Greater Melbourne.", groups["herb"]),
+         "Native wildflowers, orchids, daisies and other herbs of Greater Melbourne.",
+         [c for c in groups["herb"] if c["badge"] != "Introduced"]),
+        ("deck-mel-weeds", "Melbourne Weeds & Garden Escapes", "Nature & Wildlife", "🌱", "#dc2626",
+         "Introduced herbs, weeds and garden escapes you will meet around Greater Melbourne.",
+         [c for c in groups["herb"] if c["badge"] == "Introduced"]),
         ("deck-mel-grasses-ferns", "Melbourne Grasses, Ferns & More", "Nature & Wildlife", "🌾", "#14b8a6",
          "Grasses, sedges, rushes, ferns and other plants of Greater Melbourne.", groups["other"]),
     ]
