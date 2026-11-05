@@ -1831,3 +1831,14 @@ textarea:focus-visible,
   gap: 8px;
   cursor: pointer;
 }
+
+.card-credits {
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.card-credits a {
+  color: inherit;
+  text-decoration: underline;
+}

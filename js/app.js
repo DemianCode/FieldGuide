@@ -29,6 +29,7 @@ import {
   generateMoreCardsJson
 } from './ai.js';
 import { AI_DECK_PROMPT_TEMPLATE, STARTER_DECKS } from '../data/starter-decks.js';
+import { loadLibraryCatalog, loadLibraryPack } from './library.js';
 
 const state = {
   view: 'home', // 'home' | 'study'
@@ -83,8 +84,14 @@ const state = {
   renamingFolder: null,
   renameFolderInput: '',
 
+  // Deck library (ready-made regional and flag decks, fetched on demand)
+  libraryCatalog: null, // null until loaded
+  libraryError: '',
+  libraryBusyId: null,
+  libraryFolder: 'all',
+
   // Menus / Bottom Sheets
-  activeSheet: null, // null | 'study-options' | 'deck-context' | 'add-deck' | 'home-menu' | 'manage-folders' | 'ai-settings' | 'deck-cards' | 'card-editor'
+  activeSheet: null, // null | 'library' | 'study-options' | 'deck-context' | 'add-deck' | 'home-menu' | 'manage-folders' | 'ai-settings' | 'deck-cards' | 'card-editor'
   contextDeckId: null,
   addDeckTab: 'paste', // 'generate' | 'write' | 'paste' | 'prompt'
   confirmAction: null, // null | 'reset-progress' | 'delete-deck' | 'restore-starters'
@@ -913,6 +920,109 @@ async function saveNewDecks(decks) {
   }
 }
 
+// --- DECK LIBRARY ---
+async function openLibrary() {
+  state.confirmAction = null;
+  state.activeSheet = 'library';
+  state.libraryError = '';
+  render();
+  if (state.libraryCatalog) return;
+  try {
+    state.libraryCatalog = await loadLibraryCatalog();
+  } catch (err) {
+    state.libraryError = 'Could not load the deck library. Check your connection and try again.';
+  }
+  if (state.activeSheet === 'library') render();
+}
+
+async function installLibraryPack(packId) {
+  const pack = (state.libraryCatalog || []).find((p) => p.id === packId);
+  if (!pack || state.libraryBusyId) return;
+  state.libraryBusyId = packId;
+  render();
+  try {
+    const deck = await loadLibraryPack(pack.file);
+    await saveDeck(deck);
+    await refreshData();
+    showToast(`Added "${deck.title}" (${deck.cards.length} cards). Use its menu to save photos offline.`);
+  } catch (err) {
+    showToast(err.message || 'Could not add that deck.');
+  }
+  state.libraryBusyId = null;
+  render();
+}
+
+function renderLibrarySheet() {
+  const catalog = state.libraryCatalog;
+  const installed = new Set(state.decks.map((d) => d.id));
+  const folders = catalog ? [...new Set(catalog.map((p) => p.category))] : [];
+  const visible = (catalog || []).filter((p) => state.libraryFolder === 'all' || p.category === state.libraryFolder);
+
+  let body;
+  if (state.libraryError) {
+    body = `<p style="color:var(--text-muted);font-size:0.92rem;">${esc(state.libraryError)}</p>
+      <button class="btn btn-primary" data-action="open-library" style="width:100%;">Try again</button>`;
+  } else if (!catalog) {
+    body = `<p style="color:var(--text-muted);font-size:0.92rem;">Loading the library…</p>`;
+  } else {
+    body = `
+      ${
+        folders.length > 1
+          ? `<div class="study-filter-strip" aria-label="Library folders">
+              <button class="filter-chip ${state.libraryFolder === 'all' ? 'active' : ''}" data-action="library-folder" data-folder="all">All</button>
+              ${folders
+                .map(
+                  (f) =>
+                    `<button class="filter-chip ${state.libraryFolder === f ? 'active' : ''}" data-action="library-folder" data-folder="${esc(f)}">${esc(f)}</button>`
+                )
+                .join('')}
+            </div>`
+          : ''
+      }
+      <div class="sheet-menu-list">
+        ${visible
+          .map((p) => {
+            const have = installed.has(p.id);
+            const busy = state.libraryBusyId === p.id;
+            return `
+              <div class="sheet-item" style="cursor:default;align-items:flex-start;">
+                <span class="sheet-item-label" style="align-items:flex-start;">
+                  <span style="font-size:1.5rem;line-height:1.2;">${esc(p.icon || '📚')}</span>
+                  <span style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+                    <span>${esc(p.title)}</span>
+                    <span style="font-size:0.8rem;font-weight:500;color:var(--text-muted);">${p.count} cards${p.region ? ` · ${esc(p.region)}` : ''}</span>
+                    <span style="font-size:0.8rem;font-weight:500;color:var(--text-muted);">${esc(p.description || '')}</span>
+                  </span>
+                </span>
+                ${
+                  have
+                    ? `<span class="source-link" style="flex:none;">Added</span>`
+                    : `<button class="btn btn-primary" data-action="install-pack" data-pack="${esc(p.id)}" style="flex:none;padding:8px 14px;" ${state.libraryBusyId ? 'disabled' : ''}>${busy ? 'Adding…' : 'Add'}</button>`
+                }
+              </div>`;
+          })
+          .join('')}
+      </div>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin:12px 2px 0;">
+        Species lists and photos come from iNaturalist contributors, text from Wikipedia, and flags from Wikidata and Wikimedia Commons.
+        Every card shows its photo credit and licence.
+      </p>`;
+  }
+
+  return `
+    <div class="sheet-backdrop" data-action="close-sheet">
+      <div class="bottom-sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+          <span class="sheet-title">Deck library</span>
+          <button class="sheet-close-btn" data-action="close-sheet" aria-label="Close">${icon('close', 'sm')}</button>
+        </div>
+        ${body}
+      </div>
+    </div>
+  `;
+}
+
 // --- AI CONNECTION & IN-APP GENERATION ---
 function openAiSettings(returnSheet = null) {
   state.aiDraft = JSON.parse(JSON.stringify(state.aiSettings));
@@ -1197,6 +1307,11 @@ async function saveEditorCard(addAnother = false) {
     noAutoImage: !d.autoImage,
     userAdded: true
   });
+  if (imageChanged || state.editorPhotoBlob) {
+    delete card.imageCredit;
+    delete card.imageLicense;
+    delete card.imageSource;
+  }
   if (!existing) deck.cards.push(card);
 
   if (state.editorPhotoBlob) {
@@ -1500,6 +1615,9 @@ function renderHomeView() {
 
     <div class="section-header-row">
       <span class="section-heading">Decks</span>
+      <button class="icon-btn" data-action="open-library" aria-label="Deck library">
+        ${icon('download')}
+      </button>
       <button class="icon-btn" data-action="toggle-home-search" aria-label="Search decks" aria-expanded="${state.homeSearchOpen || Boolean(state.homeSearchQuery)}">
         ${icon('search')}
       </button>
@@ -1590,6 +1708,14 @@ function renderMediaFrame(card, deck, { cls = '', badge = false, status = false,
   `;
 }
 
+function renderCardCredits(card) {
+  if (!card.imageCredit && !card.textCredit) return '';
+  const photo = card.imageCredit
+    ? `Photo: ${isHttpUrl(card.imageSource) ? `<a href="${esc(card.imageSource)}" target="_blank" rel="noopener noreferrer">${esc(card.imageCredit)}</a>` : esc(card.imageCredit)}`
+    : '';
+  return `<div class="card-credits">${[photo, card.textCredit ? esc(card.textCredit) : ''].filter(Boolean).join(' · ')}</div>`;
+}
+
 function renderCardDetails(card, { aboutLabel = 'About', showLink = true } = {}) {
   return `
     ${
@@ -1608,6 +1734,8 @@ function renderCardDetails(card, { aboutLabel = 'About', showLink = true } = {})
           </div>`
         : ''
     }
+    ${card.family ? `<div class="info-block"><div class="info-block-label">Family</div><div>${esc(card.family)}</div></div>` : ''}
+    ${renderCardCredits(card)}
     ${
       showLink && isHttpUrl(card.sourceUrl)
         ? `<div class="card-footer-row">
@@ -1995,6 +2123,10 @@ function renderBottomSheet() {
           <div class="sheet-section">
             <div class="sheet-section-label">Create &amp; Organize</div>
             <div class="sheet-menu-list">
+              <button class="sheet-item" data-action="open-library">
+                <span class="sheet-item-label">${icon('download', 'sm')} Deck library: birds, plants &amp; flags</span>
+                <span>${icon('next', 'sm')}</span>
+              </button>
               <button class="sheet-item" data-action="open-add-deck" data-tab="generate">
                 <span class="sheet-item-label">${icon('sparkle', 'sm')} Generate a deck with AI</span>
                 <span>${icon('next', 'sm')}</span>
@@ -2193,6 +2325,7 @@ function renderBottomSheet() {
     `;
   }
 
+  if (state.activeSheet === 'library') return renderLibrarySheet();
   if (state.activeSheet === 'ai-settings') return renderAiSettingsSheet();
   if (state.activeSheet === 'deck-cards') return renderDeckCardsSheet();
   if (state.activeSheet === 'card-editor') return renderCardEditorSheet();
@@ -3374,6 +3507,19 @@ function attachEvents() {
           state.newFolderInput = '';
           state.activeSheet = 'deck-context';
           render();
+          break;
+
+        case 'open-library':
+          openLibrary();
+          break;
+
+        case 'library-folder':
+          state.libraryFolder = el.dataset.folder || 'all';
+          render();
+          break;
+
+        case 'install-pack':
+          installLibraryPack(el.dataset.pack);
           break;
 
         case 'open-add-deck':
