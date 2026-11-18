@@ -60,6 +60,12 @@ DESC_ROLES = [
     (r"light aircraft|utility aircraft|general aviation|sport aircraft|aerobatic|flying boat|seaplane|amphibi", "Utility", "civil"),
 ]
 
+# Militarised airliners (AEW, patrol, VIP) are tagged as airliners on Wikidata.
+MILITARY_DESC = r"early warning|command post|maritime patrol|anti-submarine|presidential|military|air force|tanker|surveillance"
+# One-off research types: X-planes and Y-prefixed US prototypes (XB-70, YF-23, YAL-1).
+EXPERIMENTAL_DESC = r"prototype|experimental|demonstrator|technology testbed|concept aircraft"
+EXPERIMENTAL_NAME = r"\b(X[A-Z]{0,2}|YF|YB|YC|YAL)-\d"
+
 MIN_SITELINKS = 15
 HISTORIC_BEFORE = 1946  # first flight before this -> historic deck
 CAPS = {"airliners": 150, "military": 200, "historic": 200, "helicopters": 80}
@@ -150,8 +156,10 @@ def classify(items):
                 if re.search(pat, d):
                     it["role"] = (label, kind)
                     break
-        # Production types that are also tagged experimental stay in if they have a role.
-        it["excluded"] = it["q"] in excluded and it["role"] is None
+        if it["role"] and it["role"][1] == "civil" and re.search(MILITARY_DESC, it["desc"], re.I):
+            it["role"] = ("Military", "mil")
+        it["excluded"] = (it["q"] in excluded or re.search(EXPERIMENTAL_DESC, it["desc"], re.I)
+                          or re.search(EXPERIMENTAL_NAME, it["name"]))
 
 
 def make_card(it, info, wiki_cache):
@@ -169,7 +177,7 @@ def make_card(it, info, wiki_cache):
     credit = f"{meta['artist'] + ', ' if meta['artist'] else ''}{meta['license']} via Wikimedia Commons"
     return {
         "id": f"aircraft-{it['q']}",
-        "name": it["name"],
+        "name": re.sub(r" \([^)]*\)$", "", article),  # article titles beat bare Wikidata labels
         "subtitle": sub or it["role"][0],
         "badge": it["role"][0],
         "description": sentences(intro, 420) if intro else it["desc"].capitalize(),
