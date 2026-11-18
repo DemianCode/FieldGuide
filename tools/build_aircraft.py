@@ -66,6 +66,9 @@ MILITARY_DESC = r"early warning|command post|maritime patrol|anti-submarine|pres
 EXPERIMENTAL_DESC = r"prototype|experimental|demonstrator|technology testbed|concept aircraft"
 EXPERIMENTAL_NAME = r"\b(X[A-Z]{0,2}|YF|YB|YC|YAL)-\d"
 
+# Same promise as the other packs: photos must be public domain, CC0, CC BY or CC BY-SA.
+OK_LICENSE = r"^(public domain|pdm?|cc0|cc by(-sa)? [\d.]+|cc by(-sa)?)\b"
+
 MIN_SITELINKS = 15
 HISTORIC_BEFORE = 1946  # first flight before this -> historic deck
 CAPS = {"airliners": 150, "military": 200, "historic": 200, "helicopters": 80}
@@ -222,11 +225,12 @@ def build(outdir):
             groups["military"].append(it)
         else:
             groups["airliners"].append(it)
+    info = commons_info([file_title(i["img"]) for g in groups.values() for i in g])
     for k in groups:
-        groups[k] = sorted(groups[k], key=lambda i: -i["sl"])[:CAPS[k]]
+        ok = [i for i in groups[k] if re.match(OK_LICENSE, info.get(file_title(i["img"]), {}).get("license", ""), re.I)]
+        groups[k] = sorted(ok, key=lambda i: -i["sl"])[:CAPS[k]]
         print(k, len(groups[k]))
 
-    info = commons_info([file_title(i["img"]) for g in groups.values() for i in g])
     wiki_cache = {}
     specs = [
         ("airliners", "deck-aircraft-airliners", "Airliners & Civil Aircraft", "✈️", "#0284c7",

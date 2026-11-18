@@ -9,6 +9,7 @@ ORDER = [
     "deck-mel-wildflowers", "deck-mel-weeds", "deck-mel-grasses-ferns",
     "deck-flags-national", "deck-flags-historical", "deck-flags-australia", "deck-flags-us",
     "deck-flags-canada", "deck-flags-regions",
+    "deck-aircraft-airliners", "deck-aircraft-military", "deck-aircraft-historic", "deck-aircraft-helicopters",
 ]
 
 
