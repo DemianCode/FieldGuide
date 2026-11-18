@@ -142,6 +142,50 @@
    "region": "",
    "count": 954,
    "file": "deck-flags-regions.json"
+  },
+  {
+   "id": "deck-aircraft-airliners",
+   "title": "Airliners & Civil Aircraft",
+   "icon": "✈️",
+   "color": "#0284c7",
+   "category": "Aircraft",
+   "description": "Airliners, freighters, business jets and light aircraft since 1946.",
+   "region": "",
+   "count": 149,
+   "file": "deck-aircraft-airliners.json"
+  },
+  {
+   "id": "deck-aircraft-military",
+   "title": "Military Aircraft",
+   "icon": "🛩️",
+   "color": "#4d7c0f",
+   "category": "Aircraft",
+   "description": "Fighters, bombers, transports and trainers from the jet age to today.",
+   "region": "",
+   "count": 198,
+   "file": "deck-aircraft-military.json"
+  },
+  {
+   "id": "deck-aircraft-historic",
+   "title": "Historic Aircraft",
+   "icon": "🛫",
+   "color": "#a16207",
+   "category": "Aircraft",
+   "description": "From the Wright Flyer to the Second World War: aircraft that first flew before 1946.",
+   "region": "",
+   "count": 200,
+   "file": "deck-aircraft-historic.json"
+  },
+  {
+   "id": "deck-aircraft-helicopters",
+   "title": "Helicopters",
+   "icon": "🚁",
+   "color": "#be123c",
+   "category": "Aircraft",
+   "description": "Military and civil helicopters from the 1940s to today.",
+   "region": "",
+   "count": 79,
+   "file": "deck-aircraft-helicopters.json"
   }
  ]
 }

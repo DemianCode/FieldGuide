@@ -7,13 +7,14 @@ A sleek, mobile-first Progressive Web App (PWA) for Android and desktop designed
 2. **🌸 Flower Identification** (Common name, botanical Latin name, plant family, petal structure traits, and Wikipedia links)
 3. **✈️ Plane Identification** (Commercial airliners, fighters, supersonic & transport aircraft, spotting cues, and Wikipedia links)
 
-## Deck Library (regional species and flags)
+## Deck Library (regional species, flags and aircraft)
 Home menu (or the download icon beside **Decks**) → **Deck library** lists large ready-made decks that are fetched on demand, so the app itself stays small. Each is added to your device and works offline once its photos are saved.
 
 - **Greater Melbourne, Australia**: native and introduced birds (218), trees, shrubs & climbers, native wildflowers, introduced weeds & garden escapes, and grasses/ferns (1,316 cards in all). Only species with regular recent sightings within about 45 km of the CBD are included.
 - **Flags** (1,431 cards): all 197 national flags, 203 notable historical flags, Australian, US and Canadian state/province flags, and 954 regional flags from 112 countries.
+- **Aircraft** (626 cards): 149 airliners & civil aircraft (business jets, light aircraft, freighters) since 1946, 198 military aircraft from the jet age on, 200 historic aircraft that first flew before 1946, and 79 helicopters. Each card gives the maker and first-flight year, a role badge (Fighter, Bomber, Airliner, Business jet...), and a Wikipedia summary with design notes. Prototypes and one-off research aircraft are left out.
 
-Flag images are hot-linked from Wikimedia Commons thumbnails; if Wikimedia is throttling your connection a flag may briefly show a placeholder, so use **Save photos offline** on a deck while you have a good connection.
+Flag and aircraft images are hot-linked from Wikimedia Commons thumbnails; if Wikimedia is throttling your connection an image may briefly show a placeholder, so use **Save photos offline** on a deck while you have a good connection.
 
 Every library card carries its photo credit and licence (and a Wikipedia text credit where text is used). Photos are limited to CC0, CC BY and CC BY-SA so the app can be published with attribution.
 

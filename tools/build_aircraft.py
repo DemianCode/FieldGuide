@@ -16,7 +16,7 @@ import sys
 import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_flags import PREFIX, SPARQL, commons_info, file_title, thumb_url, val, year  # noqa: E402
+from build_flags import COMMONS, PREFIX, SPARQL, commons_info, file_title, thumb_url, val, year  # noqa: E402
 from fgnet import get_json  # noqa: E402
 from build_nature import sentences, wiki_extract  # noqa: E402
 
@@ -61,13 +61,16 @@ DESC_ROLES = [
 ]
 
 # Militarised airliners (AEW, patrol, VIP) are tagged as airliners on Wikidata.
-MILITARY_DESC = r"early warning|command post|maritime patrol|anti-submarine|presidential|military|air force|tanker|surveillance"
+MILITARY_DESC = r"early warning|airborne warning|awacs|command post|maritime patrol|anti-submarine|presidential|military|air force|tanker|surveillance"
 # One-off research types: X-planes and Y-prefixed US prototypes (XB-70, YF-23, YAL-1).
 EXPERIMENTAL_DESC = r"prototype|experimental|demonstrator|technology testbed|concept aircraft"
 EXPERIMENTAL_NAME = r"\b(X[A-Z]{0,2}|YF|YB|YC|YAL)-\d"
 
 # Same promise as the other packs: photos must be public domain, CC0, CC BY or CC BY-SA.
 OK_LICENSE = r"^(public domain|pdm?|cc0|cc by(-sa)? [\d.]+|cc by(-sa)?)\b"
+
+SKIP = {"Q1125423"}  # Marine One: a call sign, not an aircraft type
+FIRST_FLIGHT_FIX = {"Q694356": 1966}  # Bell OH-58 Kiowa (Wikidata gives a later variant's date)
 
 MIN_SITELINKS = 15
 HISTORIC_BEFORE = 1946  # first flight before this -> historic deck
@@ -165,6 +168,27 @@ def classify(items):
                           or re.search(EXPERIMENTAL_NAME, it["name"]))
 
 
+def thumb_urls(titles, width=960):
+    """File title -> Commons' own thumbnail URL (the original when it is narrower than width)."""
+    out = {}
+    titles = sorted(set(titles))
+    for i in range(0, len(titles), 40):
+        chunk = titles[i:i + 40]
+        r = get_json(COMMONS, {"action": "query", "prop": "imageinfo", "iiprop": "url", "iiurlwidth": width,
+                               "format": "json", "formatversion": 2, "redirects": 1,
+                               "titles": "|".join("File:" + t for t in chunk)}, gap=1)
+        redirects = {x["from"][5:]: x["to"][5:] for x in r.get("query", {}).get("redirects", [])}
+        pages = {p["title"][5:]: p for p in r.get("query", {}).get("pages", []) if "imageinfo" in p}
+        for t in chunk:
+            p = pages.get(redirects.get(t, t))
+            if p:
+                ii = p["imageinfo"][0]
+                url = (ii.get("thumburl") or ii["url"]).split("?", 1)[0]
+                # Same host as the other packs (it sends CORS headers, which offline saving needs).
+                out[t] = url.replace("://thumb.wikimedia.org/", "://upload.wikimedia.org/")
+    return out
+
+
 def make_card(it, info, wiki_cache):
     title = file_title(it["img"])
     meta = info.get(title)
@@ -175,6 +199,8 @@ def make_card(it, info, wiki_cache):
     intro = features = ""
     if got:
         intro, features = split_aircraft_extract(got[1])
+    if re.search(r"\bunder development\b", intro.split(". ")[0]):
+        return None  # not flying yet
     maker = it["makers"][0] if it["makers"] else ""
     sub = " · ".join(x for x in (maker, f"first flew {it['ff']}" if it["ff"] else "") if x)
     credit = f"{meta['artist'] + ', ' if meta['artist'] else ''}{meta['license']} via Wikimedia Commons"
@@ -185,7 +211,7 @@ def make_card(it, info, wiki_cache):
         "badge": it["role"][0],
         "description": sentences(intro, 420) if intro else it["desc"].capitalize(),
         "keyFeatures": sentences(features, 360, 2) if features else "",
-        "imageUrl": thumb_url(title),
+        "imageUrl": info["_thumbs"].get(title) or thumb_url(title),
         "imageCredit": credit,
         "imageLicense": meta["license"],
         "imageSource": meta["page"],
@@ -212,7 +238,8 @@ def build(outdir):
     classify(items)
     groups = {"airliners": [], "military": [], "historic": [], "helicopters": []}
     for it in items.values():
-        if it["excluded"] or not it["role"]:
+        it["ff"] = FIRST_FLIGHT_FIX.get(it["q"], it["ff"])
+        if it["excluded"] or not it["role"] or it["q"] in SKIP:
             continue
         label, kind = it["role"]
         if kind == "heli":
@@ -231,6 +258,7 @@ def build(outdir):
         groups[k] = sorted(ok, key=lambda i: -i["sl"])[:CAPS[k]]
         print(k, len(groups[k]))
 
+    info["_thumbs"] = thumb_urls([file_title(i["img"]) for g in groups.values() for i in g])
     wiki_cache = {}
     specs = [
         ("airliners", "deck-aircraft-airliners", "Airliners & Civil Aircraft", "✈️", "#0284c7",
