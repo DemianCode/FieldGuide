@@ -1,0 +1,71 @@
+name: Build check
+
+# Does the code compile, and do the tests pass? Nothing else.
+#
+# Deliberately separate from build-apk.yml, which is manual-dispatch only and *publishes* a
+# GitHub release for every run. That makes it the wrong tool for "did I break the build?": you
+# can't run it on a push without minting a tag and a release nobody asked for. This one builds
+# and stops, so it is safe to run on every push to every branch.
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+# A new push supersedes the run already in flight for the same ref.
+concurrency:
+  group: build-check-${{ github.ref }}
+  cancel-in-progress: true
+
+# Keep this block byte-identical to the one in build-apk.yml.
+env:
+  JAVA_VERSION: "17"
+  ANDROID_PLATFORM: "android-36"
+  ANDROID_BUILD_TOOLS: "36.0.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # Provides sdkmanager and sets ANDROID_HOME / ANDROID_SDK_ROOT, which is what
+      # settings.gradle.kts checks before including the :app module. Without it this job would
+      # silently degrade to an engine-only build — green, and proving nothing.
+      #
+      # packages: '' because the action's default is "tools platform-tools", and `tools` is the
+      # long-obsolete SDK Tools package Google dropped from the repository — the default fails
+      # with "Failed to find package 'tools'" before a line is compiled. The next step installs
+      # what the build actually needs.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager "platform-tools" "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}"
+          yes | sdkmanager --licenses > /dev/null || true
+
+      # The wrapper pins the Gradle version, so nothing here needs a version input. The action
+      # is still worth having for its dependency caching.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Engine tests
+        run: ./gradlew :engine:test
+
+      # assembleDebug rather than compileDebugKotlin: it runs KSP, so Room's annotation
+      # processor gets to reject a bad @Query or a migration that doesn't match its entities —
+      # exactly the mistakes that otherwise surface as a crash on first launch. Debug-signed
+      # with the runner's throwaway key and never uploaded; this job publishes nothing.
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace

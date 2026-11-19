@@ -408,7 +408,9 @@ async function initApp() {
   window
     .matchMedia?.('(prefers-color-scheme: dark)')
     ?.addEventListener?.('change', () => state.theme === 'system' && applyTheme());
-  if ('serviceWorker' in navigator) {
+  // The Android app bundles these files in the APK, so it needs no service worker; one would
+  // only serve stale copies after an app update.
+  if ('serviceWorker' in navigator && !window.FieldGuideAndroid) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
   await refreshData();
@@ -463,6 +465,26 @@ function showToast(message) {
 }
 
 // --- KEYBOARD SHORTCUTS ---
+// Called by the Android app's back button. Returns true when it handled the press (closed a
+// sheet or left a study session); false lets the app go to the background as usual.
+window.fieldGuideHandleBack = () => {
+  if (state.activeSheet || state.lightboxUrl || state.confirmAction) {
+    state.activeSheet = null;
+    state.confirmAction = null;
+    state.lightboxUrl = null;
+    render();
+    return true;
+  }
+  if (state.view !== 'home') {
+    clearQuizAdvanceTimer();
+    state.view = 'home';
+    render();
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    return true;
+  }
+  return false;
+};
+
 function handleGlobalKeydown(e) {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
 
@@ -1373,11 +1395,17 @@ function resyncStudySession(deckId) {
 function exportDeckToJson(deckId) {
   const deck = getDeckById(deckId);
   if (!deck) return;
+  const fileName = `${deck.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`;
+  // An Android WebView can't save a blob: download, so the app opens the system file picker.
+  if (window.FieldGuideAndroid?.saveTextFile) {
+    window.FieldGuideAndroid.saveTextFile(fileName, 'application/json', JSON.stringify(deck, null, 2));
+    return;
+  }
   const blob = new Blob([JSON.stringify(deck, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${deck.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`;
+  a.download = fileName;
   a.click();
   URL.revokeObjectURL(url);
   showToast(`Exported ${deck.title}.json`);

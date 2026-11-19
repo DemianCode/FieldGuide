@@ -88,6 +88,37 @@ Tap **＋ AI / JSON Deck** in the top header to either:
 }
 ```
 
-## Running Locally & Installing on Android
-1. Serve the folder over HTTP (e.g., `npx serve .` or `python -m http.server 8080`).
-2. To install on **Android**: host the static files (e.g., on GitHub Pages, Netlify, Cloudflare Pages, or LAN IP) and open in Chrome on Android → tap **⋮ Menu → Add to Home screen / Install app**.
+## Running Locally
+Serve the folder over HTTP (e.g., `npx serve .` or `python -m http.server 8080`).
+
+## Android App
+There are two ways to get FieldGuide on Android:
+
+- **Install the web app.** Open the GitHub Pages site in Chrome → **⋮ Menu → Add to Home screen / Install app**.
+- **Install the APK.** The repo also builds a native Android app: a thin WebView shell (`app/`) around the same web files, bundled into the APK at build time so it opens offline. Saved decks live in the app's own storage, separate from the browser's. Outside links (Wikipedia, photo credits) open in your browser, and Back closes sheets and leaves study sessions.
+
+The Android build and both workflows come from the `android-app-template` repo and follow its conventions; keep the workflow files identical to the template's copies.
+
+| Path | Why |
+|---|---|
+| `.github/workflows/build-check.yml` | Compiles, runs the engine tests and assembles a debug APK on every push. Publishes nothing. |
+| `.github/workflows/build-apk.yml` | Manual (Actions → **Build APK** → Run workflow). Builds and publishes a GitHub release per run. |
+| `app/` | The WebView shell. Its `syncWebAssets` task copies `index.html`, `styles.css`, `manifest.json`, `js/`, `data/` and `icons/` into the APK. |
+| `engine/` | Pure-JVM logic with unit tests (`./gradlew :engine:test`, needs only JDK 17). |
+
+### Installing with Obtainium
+Each **Build APK** run publishes its APK to its own release tagged `v<version>.<run number>` (e.g. `v0.1.0.17`). Add this repo's URL as a GitHub source in Obtainium. `release` builds are offered as updates; `debug` builds are published as prereleases, which Obtainium skips, because each is signed with a throwaway key and can't update over another build.
+
+### Release signing
+`release` builds fail until these repository secrets exist; `debug` builds need none. Generate the keystore **once** and back it up: Android only installs an update when the signing key is identical, so losing it means uninstalling the app (and its saved decks) before the next update.
+
+```sh
+keytool -genkeypair -v -keystore release.jks -alias release -keyalg RSA -keysize 4096 -validity 10000
+gh secret set ANDROID_KEYSTORE_BASE64 < <(base64 -w0 release.jks)
+gh secret set ANDROID_KEYSTORE_PASSWORD   # the -keystore password
+gh secret set ANDROID_KEY_ALIAS           # release
+gh secret set ANDROID_KEY_PASSWORD        # the key password
+```
+
+### Versioning
+`appVersionName` in `gradle.properties` is the marketing version; CI appends its run number (`0.1.0` + run 17 → `0.1.0.17`, `versionCode` 17). Bump `appVersionName` by hand for a real version change.

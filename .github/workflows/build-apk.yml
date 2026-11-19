@@ -1,0 +1,138 @@
+name: Build APK
+
+# Manual trigger only — run it from the Actions tab ("Run workflow").
+#
+# Each run publishes its APK to its **own** release, tagged v<version>.<run number>. Reusing a
+# single floating "latest" release and re-uploading the asset in place breaks Obtainium: GitHub
+# mints a **new asset id** on every upload, so a client holding the old id gets
+#   Not Found (https://api.github.com/repos/…/releases/assets/<old id>)
+# on its next update. A release per run never invalidates an id, and gives Obtainium a version
+# string that actually changes.
+#
+# Only `release` builds are offered as updates. Debug builds are published as prereleases
+# (which Obtainium skips by default) because they are signed with the runner's throwaway debug
+# key, so Android rejects them as an update over any previously installed build.
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Build variant to assemble"
+        type: choice
+        default: debug
+        options:
+          - debug
+          - release
+
+permissions:
+  contents: write
+
+# Keep this block byte-identical to the one in build-check.yml.
+env:
+  JAVA_VERSION: "17"
+  ANDROID_PLATFORM: "android-36"
+  ANDROID_BUILD_TOOLS: "36.0.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # packages: '' — see the note in build-check.yml.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager "platform-tools" "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}"
+          yes | sdkmanager --licenses > /dev/null || true
+
+      # The wrapper pins the Gradle version, so nothing here needs a version input. The action
+      # is still worth having for its dependency caching.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # A release APK has to be signed with a key that never changes, or Android rejects every
+      # later update as a signature mismatch. Deliberately no debug-key fallback: the runner's
+      # ~/.android/debug.keystore is generated fresh on each run, so debug-signed CI "releases"
+      # would never update over one another.
+      - name: Decode signing keystore
+        if: inputs.build_type == 'release'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Release builds need the ANDROID_KEYSTORE_BASE64 secret (plus" \
+                 "ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD)." \
+                 "See the signing section in README.md. Build 'debug' for a throwaway APK."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      # One source of truth for the marketing version (gradle.properties), plus this run's
+      # number — so the tag, the release name and the APK's own versionName always agree.
+      - name: Compute build version
+        id: version
+        run: |
+          base=$(sed -n 's/^appVersionName=//p' gradle.properties)
+          if [ -z "$base" ]; then
+            echo "::error::appVersionName is missing from gradle.properties"
+            exit 1
+          fi
+          version="${base}.${GITHUB_RUN_NUMBER}"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "Building version $version"
+
+      - name: Assemble ${{ inputs.build_type }} APK
+        env:
+          # Drives versionCode/versionName (see app/build.gradle.kts). Monotonic per workflow,
+          # which is what Android requires of versionCode for an update to install.
+          ANDROID_BUILD_NUMBER: ${{ github.run_number }}
+          ANDROID_KEYSTORE_FILE: ${{ inputs.build_type == 'release' && format('{0}/release.jks', runner.temp) || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:assemble${{ inputs.build_type == 'release' && 'Release' || 'Debug' }} --stacktrace
+
+      # Guards shipping app-release-unsigned.apk, which nothing can install: fail here rather
+      # than publish one.
+      - name: Verify the APK is signed
+        run: |
+          apk=$(find app/build/outputs/apk/${{ inputs.build_type }} -name '*.apk' -print -quit)
+          echo "Checking $apk"
+          case "$apk" in
+            *-unsigned.apk)
+              echo "::error::$apk is unsigned and cannot be installed on any device."
+              exit 1
+              ;;
+          esac
+          "$ANDROID_HOME/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" verify --print-certs "$apk"
+
+      # A fresh release per run. Nothing is deleted and nothing is overwritten, so no asset id
+      # a client may have cached is ever invalidated. Assets keep their plain names
+      # (app-release.apk) so a name-based filter in Obtainium still matches.
+      - name: Publish APK to its own release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.name }}
+          prerelease: ${{ inputs.build_type != 'release' }}
+          make_latest: ${{ inputs.build_type == 'release' }}
+          fail_on_unmatched_files: true
+          files: app/build/outputs/apk/${{ inputs.build_type }}/*.apk
+          body: |
+            ${{ inputs.build_type }} build of `${{ github.sha }}`.
+
+            Version `${{ steps.version.outputs.name }}` (versionCode ${{ github.run_number }}).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
