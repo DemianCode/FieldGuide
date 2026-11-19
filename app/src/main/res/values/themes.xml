@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DayNight matters beyond the window colour: a WebView reports prefers-color-scheme from
+         the theme's isLightTheme, so a Light theme would pin the web app's "Automatic"
+         appearance to light. The background matches the web app's --bg-app so there is no
+         flash before the page paints. -->
+    <style name="Theme.App" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/app_background</item>
+    </style>
+</resources>

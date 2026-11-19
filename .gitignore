@@ -16,3 +16,13 @@ node_modules/
 dist/
 tools/.cache/
 __pycache__/
+
+# Android build output (from android-app-template)
+build/
+.gradle/
+.cxx/
+local.properties
+# Key material. Never commit a keystore: it goes in a repository secret, base64-encoded.
+*.jks
+*.keystore
+*.iml
